@@ -1,0 +1,1928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>LostGuessr</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css">
+<style>
+:root{
+  --bg:#12141c; --panel:#1c2030; --panel2:#262b40; --text:#eef0f7; --muted:#9aa1bd;
+  --accent:#ffb703; --accent2:#fb8500; --green:#2ecc71; --blue:#3b82f6; --red:#ef4444;
+}
+:root[data-theme="light"]{
+  --bg:#eef2f7; --panel:#ffffff; --panel2:#e3e9f2; --text:#172033; --muted:#58657c;
+  --accent:#2563eb; --accent2:#06b6d4; --green:#16834a; --blue:#2563eb; --red:#dc2626;
+}
+:root[data-theme="ocean"]{
+  --bg:#071b2b; --panel:#0d2b40; --panel2:#16435b; --text:#e5f6ff; --muted:#9dc3d8;
+  --accent:#38bdf8; --accent2:#14b8a6; --green:#2dd4a0; --blue:#60a5fa; --red:#fb7185;
+}
+:root[data-theme="light"] #start,:root[data-theme="light"] #lobby{
+  background:radial-gradient(1200px 700px at 20% 0%,#dbeafe 0%,transparent 60%),radial-gradient(900px 600px at 100% 100%,#cffafe 0%,transparent 55%),var(--bg)
+}
+:root[data-theme="light"] #final{background:radial-gradient(1000px 600px at 50% 0%,#dbeafe 0%,transparent 60%),var(--bg)}
+:root[data-theme="light"] .chip,:root[data-theme="light"] .hudbtn,:root[data-theme="light"] .ps{background:#ffffffdf;color:var(--text);border-color:#17203320}
+:root[data-theme="light"] #mpBoard{background:#ffffffef;color:var(--text);border-color:#17203320}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
+button{font:inherit;cursor:pointer}
+.screen{position:fixed;inset:0;display:none;z-index:50}
+.screen.active{display:flex}
+
+
+/* ---------- Start ---------- */
+#start,#lobby{align-items:center;justify-content:center;padding:16px;overflow:auto;
+  background:radial-gradient(1200px 700px at 20% 0%,#2a3358 0%,transparent 60%),
+             radial-gradient(900px 600px at 100% 100%,#4a2a14 0%,transparent 55%),var(--bg)}
+.card{background:var(--panel);border:1px solid #ffffff14;border-radius:18px;padding:28px;
+  width:100%;max-width:520px;box-shadow:0 20px 60px #0008;margin:auto}
+.logo{font-size:36px;font-weight:800;letter-spacing:-.5px;margin:0 0 4px}
+.logo span{color:var(--accent)}
+.sub{color:var(--muted);margin:0 0 18px;font-size:15px;line-height:1.45}
+label{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+input[type=text],select{width:100%;padding:12px 14px;border-radius:10px;border:1px solid #ffffff1f;
+  background:var(--panel2);color:var(--text);font:inherit;outline:none}
+input[type=text]:focus,select:focus{border-color:var(--accent)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{border:0;border-radius:12px;padding:14px 20px;font-weight:700;font-size:16px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#1a1204;transition:transform .08s,filter .15s}
+.btn:hover{filter:brightness(1.08)} .btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.btn.ghost{background:var(--panel2);color:var(--text);border:1px solid #ffffff1f}
+.btn.big{width:100%;margin-top:22px;font-size:18px;padding:16px}
+.mapbtn{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;
+  padding:13px 14px;border-radius:10px;border:1px solid #ffffff1f;background:var(--panel2);color:var(--text);font:inherit;font-weight:600}
+.mapbtn:hover,.mapbtn:focus{border-color:var(--accent);outline:none}
+.mapbtn small{color:var(--muted);font-weight:500}
+.best{margin-top:14px;font-size:13px;color:var(--muted);text-align:center}
+.credit{margin-top:12px;font-size:11px;color:#ffffff55;text-align:center}
+.err{background:#ef444422;border:1px solid #ef444466;color:#ffb4b4;padding:10px 12px;border-radius:10px;font-size:14px;margin-top:14px;display:none}
+
+/* ---------- Map picker modal ---------- */
+.modal{position:fixed;inset:0;z-index:200;background:#000a;display:none;align-items:center;justify-content:center;padding:16px}
+.modal.open{display:flex}
+.mcard{background:var(--panel);border:1px solid #ffffff1a;border-radius:16px;width:100%;max-width:460px;max-height:min(640px,90vh);
+  display:flex;flex-direction:column;box-shadow:0 20px 60px #000a;overflow:hidden}
+.mhead{display:flex;gap:8px;padding:12px;border-bottom:1px solid #ffffff12}
+.mhead input{flex:1}
+.mclose{background:var(--panel2);border:1px solid #ffffff1f;color:var(--text);border-radius:10px;padding:0 14px;font-size:16px}
+#mapList{overflow:auto;padding:6px 8px 10px}
+.grp{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:12px 8px 4px}
+.item{display:flex;justify-content:space-between;width:100%;text-align:left;background:none;border:0;color:var(--text);
+  padding:10px 10px;border-radius:8px;font:inherit}
+.item:hover{background:#ffffff10}
+.item.sel{background:#ffb70322;color:var(--accent);font-weight:700}
+.item small{color:var(--muted)}
+.nomatch{padding:24px;text-align:center;color:var(--muted)}
+
+/* ---------- Game ---------- */
+#game{background:#000}
+#viewer{position:absolute;inset:0;background:#0b0d13}
+.hud{position:absolute;top:12px;left:12px;right:150px;display:flex;gap:10px;z-index:20;pointer-events:none;flex-wrap:wrap}
+.chip{background:#12141ccc;backdrop-filter:blur(8px);border:1px solid #ffffff1c;border-radius:12px;
+  padding:8px 14px;font-weight:700;font-size:15px;pointer-events:auto}
+.chip small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+.chip.timer.low{color:var(--red);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.5}}
+.spacer{flex:1}
+.hudbtn{background:#12141ccc;color:var(--text);border:1px solid #ffffff1c;border-radius:12px;padding:8px 14px;font-weight:600;pointer-events:auto}
+.hudbtn:hover{background:#262b40}
+#loading{position:absolute;inset:0;background:#0b0d13;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+#loading.show{display:flex}
+.spin{width:46px;height:46px;border-radius:50%;border:4px solid #ffffff22;border-top-color:var(--accent);animation:sp 0.9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+#guessBox{position:absolute;right:14px;bottom:34px;z-index:25;width:300px;height:210px;
+  background:var(--panel);border-radius:14px;padding:6px;box-shadow:0 10px 40px #000a;
+  transition:width .2s,height .2s,opacity .2s;opacity:.88;display:flex;flex-direction:column;gap:6px}
+#guessBox:hover,#guessBox.pinned{width:min(640px,calc(100vw - 28px));height:min(470px,calc(100vh - 160px));opacity:1}
+#miniMap{flex:1;border-radius:10px;cursor:crosshair;background:#aad3df}
+.gbtns{display:flex;gap:6px}
+.gbtns .btn{flex:1;padding:10px;font-size:15px}
+.gbtns .btn.ghost{flex:0 0 auto;padding:10px 14px}
+@media (hover:none){
+  #guessBox{width:200px;height:150px}
+  #guessBox:hover{width:200px;height:150px}
+  #guessBox.pinned{width:calc(100vw - 28px);height:calc(100vh - 170px)}
+}
+@media (max-width:600px){ .hud{right:12px;top:52px} }
+
+#countryMap .leaflet-interactive{transition:fill .15s,fill-opacity .15s}
+#countryFeedback{font-weight:700;color:var(--muted)}
+#countryFeedback.good{color:var(--green)} #countryFeedback.bad{color:var(--red)}
+/* ---------- Result ---------- */
+#result{background:var(--bg);flex-direction:column}
+#resMap{flex:1}
+.resbar{background:var(--panel);padding:18px 20px;display:flex;align-items:center;gap:22px;flex-wrap:wrap;justify-content:center;border-top:1px solid #ffffff14}
+.resbar .big{font-size:34px;font-weight:800;color:var(--accent);min-width:150px;text-align:center}
+.resbar .big small{display:block;font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px}
+.resbar .dist{font-size:18px}
+.resbar .dist small{display:block;color:var(--muted);font-size:12px}
+.meter{flex:1;min-width:160px;max-width:380px;height:12px;background:#ffffff14;border-radius:99px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--green));transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+.pin{width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px #0008}
+.pin.guess{background:var(--blue)} .pin.truth{background:var(--green)}
+.pin.mini{width:18px;height:18px}
+.leaflet-container{font-family:inherit}
+
+/* ---------- Final ---------- */
+#final{align-items:center;justify-content:center;padding:16px;overflow:auto;
+  background:radial-gradient(1000px 600px at 50% 0%,#2a3358 0%,transparent 60%),var(--bg)}
+.total{font-size:56px;font-weight:900;color:var(--accent);text-align:center;margin:6px 0 2px}
+.totalsub{text-align:center;color:var(--muted);margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:9px 6px;text-align:right;border-bottom:1px solid #ffffff12}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.7px}
+.newbest{color:var(--green);text-align:center;font-weight:700;margin-bottom:8px}
+
+/* ---------- Multiplayer ---------- */
+.mcard.pad{padding:22px;overflow:auto}
+.sep{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:.8px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:#ffffff1c}
+.codein{text-transform:uppercase;letter-spacing:6px;font-weight:800;text-align:center;font-size:22px}
+.roomcode{display:flex;align-items:center;gap:12px;justify-content:space-between;background:var(--panel2);border-radius:12px;padding:12px 14px;margin:6px 0 4px}
+.roomcode small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+.roomcode b{font-size:30px;letter-spacing:6px;color:var(--accent)}
+.roomcode .btn{padding:9px 14px;font-size:14px}
+.plist{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.pl{display:flex;align-items:center;gap:10px;background:#ffffff08;border-radius:10px;padding:9px 12px;font-weight:600}
+.pl small{color:var(--muted);margin-left:auto;font-weight:500}
+.dot{width:12px;height:12px;border-radius:50%;flex:none;border:2px solid #fff8;display:inline-block}
+.lbgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+select:disabled,.mapbtn:disabled{opacity:.7;cursor:default}
+#mpStatus{position:absolute;left:12px;top:76px;z-index:20;display:flex;flex-direction:column;gap:5px;pointer-events:none}
+.ps{display:flex;align-items:center;gap:8px;background:#12141ccc;border:1px solid #ffffff1c;border-radius:10px;padding:5px 10px;font-size:13px;font-weight:600;opacity:.65}
+.ps.done{opacity:1}
+.ps.done::after{content:"\2714";color:var(--green)}
+#mpBoard{position:absolute;left:58px;top:12px;z-index:1100;background:#1c2030ee;backdrop-filter:blur(8px);border:1px solid #ffffff1c;border-radius:14px;padding:10px 12px;min-width:260px;max-width:calc(100vw - 80px);max-height:55vh;overflow:auto;display:none}
+#mpBoard table{font-size:13px}
+#mpBoard td,#mpBoard th{padding:6px 6px}
+#waitHost{color:var(--muted);font-weight:600}
+@media (max-width:600px){ #mpStatus{top:116px} }
+</style>
+</head>
+<body>
+
+<!-- ============ START ============ -->
+<div id="start" class="screen active">
+  <div class="card">
+    <h1 class="logo">Lost<span>Guessr</span></h1>
+    <p class="sub" data-i18n="tagline"></p>
+    <div id="languageWrap"><label for="languageSelect">Language</label><select id="languageSelect" aria-label="Language"><option value="en">English</option><option value="fi">Suomi</option><option value="es">Español</option><option value="fr">Français</option></select></div>
+    <div><label for="themeSelect" data-i18n="themeLabel">Theme</label><select id="themeSelect"><option value="dark" data-i18n="themeDark">Dark</option><option value="light" data-i18n="themeLight">Light</option><option value="ocean" data-i18n="themeOcean">Ocean</option></select></div>
+
+    <label data-i18n="map"></label>
+    <button id="mapBtn" class="mapbtn" type="button"><span id="mapBtnName"></span><span>▾</span></button>
+
+    <div><label for="gameMode" data-i18n="gameType"></label><select id="gameMode"><option value="classic" data-i18n="gameClassic"></option><option value="nmpz" data-i18n="gameNmpz"></option><option value="flags" data-i18n="gameFlags"></option></select></div>
+    <div class="row">
+      <div><label for="cat" data-i18n="area"></label><select id="cat"></select></div>
+      <div><label for="rounds" data-i18n="rounds"></label>
+        <select id="rounds"><option>3</option><option selected>5</option><option>10</option></select></div>
+    </div>
+    <div class="row">
+      <div><label for="time" data-i18n="time"></label><select id="time"></select></div>
+      <div><label for="moving" data-i18n="moving"></label><select id="moving"></select></div>
+    </div>
+
+    <div id="startErr" class="err"></div>
+    <button id="playBtn" class="btn big" data-i18n="play"></button>
+    <button id="mpBtn" class="btn big ghost" style="margin-top:10px" data-i18n="mpBtn"></button>
+    <div id="bestInfo" class="best"></div>
+    <div class="credit" data-i18n="credit"></div>
+  </div>
+</div>
+
+<!-- ============ MAP PICKER ============ -->
+<div id="mapModal" class="modal">
+  <div class="mcard">
+    <div class="mhead">
+      <input id="mapSearch" type="text" autocomplete="off" spellcheck="false">
+      <button id="mapClose" class="mclose" type="button">✕</button>
+    </div>
+    <div id="mapList"></div>
+  </div>
+</div>
+
+<!-- ============ LOBBY ============ -->
+<div id="lobby" class="screen">
+  <div class="card">
+    <h1 class="logo">Lost<span>Guessr</span></h1>
+    <div class="roomcode">
+      <div><small data-i18n="roomCode"></small><b id="roomCode"></b></div>
+      <button id="copyBtn" class="btn ghost" type="button"></button>
+    </div>
+    <label data-i18n="players"></label>
+    <div id="lobbyPlayers" class="plist"></div>
+    <label for="lbMode" data-i18n="mode"></label>
+    <select id="lbMode"></select>
+    <label for="lbGameType" data-i18n="gameType"></label>
+    <select id="lbGameType"></select>
+    <label data-i18n="map"></label>
+    <button id="lbMapBtn" class="mapbtn" type="button"><span id="lbMapName"></span><span>▾</span></button>
+    <div class="lbgrid">
+      <div><label for="lbCat" data-i18n="area"></label><select id="lbCat"></select></div>
+      <div id="lbRoundsWrap"><label for="lbRounds" data-i18n="rounds"></label><select id="lbRounds"></select></div>
+    </div>
+    <div class="lbgrid">
+      <div><label for="lbTime" data-i18n="time"></label><select id="lbTime"></select></div>
+      <div><label for="lbMoving" data-i18n="moving"></label><select id="lbMoving"></select></div>
+    </div>
+    <div id="lobbyErr" class="err"></div>
+    <div id="lobbyHint" class="best"></div>
+    <button id="lobbyStart" class="btn big" data-i18n="startGame"></button>
+    <button id="lobbyLeave" class="btn big ghost" style="margin-top:10px" data-i18n="leaveRoom"></button>
+  </div>
+</div>
+
+<!-- ============ MULTIPLAYER MODAL ============ -->
+<div id="mpModal" class="modal">
+  <div class="mcard pad">
+    <h2 style="margin:0 0 2px" data-i18n="mpTitle"></h2>
+    <label for="mpName" data-i18n="yourName"></label>
+    <input id="mpName" type="text" maxlength="16" autocomplete="off" spellcheck="false">
+    <button id="mpCreate" class="btn big" data-i18n="createRoom"></button>
+    <div class="sep" data-i18n="or"></div>
+    <input id="mpCode" class="codein" type="text" maxlength="6" autocomplete="off" spellcheck="false">
+    <button id="mpJoin" class="btn big ghost" style="margin-top:10px" data-i18n="joinRoom"></button>
+    <div id="mpErr" class="err"></div>
+    <button id="mpCancel" class="btn big ghost" style="margin-top:10px" data-i18n="cancel"></button>
+  </div>
+</div>
+
+<!-- ============ GAME ============ -->
+<div id="game" class="screen">
+  <div id="viewer"></div>
+  <div class="hud">
+    <div class="chip"><small data-i18n="round"></small><span id="hudRound">1 / 5</span></div>
+    <div class="chip"><small id="hudScoreLab" data-i18n="score"></small><span id="hudScore">0</span></div>
+    <div class="chip timer" id="hudTimerChip" style="display:none"><small data-i18n="timeLab"></small><span id="hudTimer">0:00</span></div>
+    <div class="spacer"></div>
+    <button class="hudbtn" id="homeBtn" data-i18n="home" data-i18n-title="homeTitle"></button>
+    <button class="hudbtn" id="quitBtn" data-i18n="quit"></button>
+  </div>
+
+  <div id="mpStatus"></div>
+
+  <div id="guessBox">
+    <div id="miniMap"></div>
+    <div class="gbtns">
+      <button class="btn ghost" id="pinBtn" data-i18n-title="pinTitle">⤢</button>
+      <button class="btn" id="guessBtn" disabled></button>
+    </div>
+  </div>
+
+  <div id="loading" class="show"><div class="spin"></div><div id="loadMsg"></div></div>
+</div>
+
+<!-- ============ COUNTRY QUIZ ============ -->
+<div id="countryGame" class="screen" style="background:var(--bg);flex-direction:column">
+  <div style="padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--panel);z-index:2">
+    <strong style="font-size:20px">LostGuessr · <span id="countryModeTitle">Lippuhaaste</span></strong>
+    <span id="countryRound" style="margin-left:auto">1 / 10</span><span id="countryScore">Score: 0</span><span id="countryTimer">Time: 0:00</span><span id="battleLives" style="display:none">❤️❤️❤️</span>
+    <label for="countryContinent" id="continentLabel">Continent</label><select id="countryContinent" style="max-width:170px"><option value="world">World</option><option value="eu">Europe</option><option value="as">Asia</option><option value="af">Africa</option><option value="na">North America</option><option value="sa">South America</option><option value="oc">Oceania</option></select>
+    <span id="countryMpScores" style="width:100%;font-size:12px;color:var(--muted);display:none"></span>
+    <button id="countryQuit" class="hudbtn">✕ Lopeta</button>
+  </div>
+  <div style="padding:12px;text-align:center;background:var(--panel2)">
+    <div id="flagPrompt">Minkä maan lippu?</div>
+    <img id="countryFlag" alt="Arvaa lipun maa" style="height:90px;max-width:180px;object-fit:contain;margin:8px auto;display:block;border-radius:4px;box-shadow:0 3px 14px #0005">
+    <div id="countryFeedback" aria-live="polite">Klikkaa kartalta oikeaa maata.</div>
+    <button id="countryNext" class="btn" style="margin-top:8px" disabled>Seuraava →</button>
+  </div>
+  <div id="battleViewer" style="display:none;height:38%;min-height:220px;position:relative;background:#111"><div id="battleStreetView" style="position:absolute;inset:0"></div></div>
+  <div id="countryMap" style="flex:1;min-height:0"></div>
+</div>
+
+<!-- ============ RESULT ============ -->
+<div id="result" class="screen">
+  <div id="resMap"></div>
+  <div id="mpBoard"></div>
+  <div class="resbar">
+    <div class="big"><small data-i18n="roundScore"></small><span id="resPts">0</span></div>
+    <div class="meter"><i id="resMeter"></i></div>
+    <div class="dist" id="resDist"></div>
+    <button class="btn" id="nextBtn"></button>
+    <span id="waitHost" style="display:none"></span>
+  </div>
+</div>
+
+<!-- ============ FINAL ============ -->
+<div id="final" class="screen">
+  <div class="card">
+    <h1 class="logo" style="text-align:center" data-i18n="finTitle"></h1>
+    <div class="total" id="finTotal">0</div>
+    <div class="totalsub" id="finSub"></div>
+    <div id="finBest" class="newbest"></div>
+    <table id="finTable"></table>
+    <button class="btn big" id="againBtn" data-i18n="again"></button>
+    <button class="btn big ghost" id="menuBtn" style="margin-top:10px" data-i18n="toSettings"></button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* ================== API KEYS (Mapillary Client Tokens) ================== */
+const TOKEN_POOL = [
+  'MLY|40066950786229036|afc06285a13f313a8e264eb2313b33ae',
+  'MLY|28801631002781167|3bb849f3983ba283a82be18d1740bb8d',
+  'MLY|27874500678891385|2a1c8e114bd6e3cf87ee1bc0c563d871',
+  'MLY|28805703735716580|b9a19a318a87927db60cc6b636ffdd8e',
+  'MLY|28328145513524044|da38b2b209028746c068a14fcad01c0a',
+  'MLY|29208779165418217|68ccb03ef117dac86cbb541d73859ccf',
+  'MLY|28438396302450144|a84953a41e17561cb2322fd4e88c516b',
+  'MLY|28332320976438717|13bb46504f01fd46f04265f3c5c97b1d',
+  'MLY|38975526412094852|d8491fe181d79850303cb41dd1826f77',
+  'MLY|28472246962402871|a29b2be3480e6d6d0d4f3381108088f1',
+  'MLY|28004823835858011|5347360913a33864a305c6365cfd2ad0',
+  'MLY|27024462257252217|f8c2b4eeb03e01d04536eae08a456252',
+  'MLY|40053688867551519|1316051604f4c7ccdb9a7d2f9468f3d0'
+];
+
+// Supports both ?MLY|...|... and ?token=MLY%7C... URL formats.
+function getUrlToken(){
+  const rawSearch = location.search.slice(1).split('#')[0];
+  if(!rawSearch) return null;
+  const params = new URLSearchParams(rawSearch);
+  const named = params.get('token') || params.get('access_token');
+  if(named && named.trim()) return named.trim();
+  let raw = rawSearch;
+  if(raw.startsWith('token=')) raw = raw.slice(6);
+  else if(raw.startsWith('access_token=')) raw = raw.slice(13);
+  try { raw = decodeURIComponent(raw); } catch(e) {}
+  raw = raw.trim();
+  return raw.startsWith('MLY|') ? raw : null;
+}
+
+/* ================== TRANSLATIONS ================== */
+const T = {
+en:{
+  tagline:'Dropped somewhere on Earth. Look around, work out where you are and pin your guess on the map.',
+  themeLabel:'Theme', themeDark:'Dark', themeLight:'Light', themeOcean:'Ocean', gameType:'Game type', gameClassic:'Classic StreetGuessr', gameNmpz:'NMPZ (no movement, panning or zooming)', gameFlags:'Flag challenge', gameBattle:'Battle Royale Countries', gameCountry:'Country challenge',
+  map:'Map', area:'Area', catAll:'Everywhere', catCapital:'Capital', catCities:'Big cities',
+  rounds:'Rounds', time:'Time per round', noLimit:'No limit', moving:'Movement', moveYes:'Can move', moveNo:'No moving',
+  play:'Play', best:'Your best ({what}, {n} rounds): {pts} pts',
+  round:'Round', score:'Score', timeLab:'Time', home:'⟲ Start', homeTitle:"Return to this round's starting point",
+  quit:'✕ Quit', quitConfirm:'Quit the game?',
+  placePin:'Place a pin on the map', guess:'Guess!', pinTitle:'Keep the map open',
+  searching:'Finding a location…', retrying:'Image failed to load, trying another…',
+  roundScore:'Round score', yourGuess:'Your guess was', away:'{d} away', timeUp:'Time is up', noGuess:'You did not guess in time',
+  next:'Next round →', showResults:'Show results →',
+  finTitle:'Game over', totalOf:'{a} / {b} points · {name}', newBest:'🏆 New personal best!',
+  thRound:'Round', thDist:'Distance', thPts:'Points', roundN:'Round {n}', again:'Play again', toSettings:'Settings',
+  errToken:'No Mapillary API key is configured.', errKey:'Mapillary rejected the API key.',
+  errNet:'Cannot reach Mapillary. Check your connection.',
+  errNoImages:'No street-level images found here. Try another area or category.',
+  errLoad:'Street images failed to load repeatedly.',
+  errLibs:'Failed to load libraries. Check your connection and reload the page.',
+  chooseMap:'Choose a map', searchPh:'Search countries…', grpWorld:'World & continents', grpCountries:'Countries', noMatch:'No matches',
+  credit:'Imagery © Mapillary contributors (CC BY-SA) · Maps © Esri',
+  mpBtn:'Multiplayer', mpTitle:'Multiplayer', yourName:'Your name', createRoom:'Create room', joinRoom:'Join room',
+  roomCodePh:'ROOM CODE', or:'or', cancel:'Cancel', roomCode:'Room code', copyLink:'Copy link', copied:'Copied!',
+  players:'Players', host:'Host', you:'you', mode:'Game mode', modeClassic:'Classic (everyone at once)', modeDuel:'Duel (1v1, health points)',
+  startGame:'Start game', leaveRoom:'Leave room', needPlayers:'At least 2 players are needed to start.', duelNeeds2:'Duel needs exactly 2 players.',
+  waitHostStart:'Waiting for the host to start the game…', waitHostNext:'Waiting for the host…', waitOthers:'Waiting for the others…',
+  errRoom:'Room not found. Check the code.', errBusy:'That game has already started.', errFull:'The room is full.',
+  errHostLeft:'The host left the game.', errCode:'Enter a room code.', errSignal:'Could not reach the connection server. Try again.',
+  errPeerLib:'The multiplayer library failed to load. Check your connection and reload the page.',
+  hp:'HP', thPlayer:'Player', mpTotal:'Total', multiplier:'Damage multiplier ×{m}', youWon:'🏆 You won!', backToLobby:'Back to lobby',
+  countryNext:'Next →', countryMapError:'Could not load country borders. Check your connection and reload.', findCountry:'Find this country on the map', whichFlag:'Which country does this flag belong to?', clickCountry:'Click the correct country on the map.', clickFlagCountry:'Click the country matching the flag.', countryCorrect:'Correct! {name} +100 points.', countryWrong:'Wrong! You clicked {picked}. Correct answer: {name}.', countryFinished:'Game over! You scored {score} points.', livesOver:'No lives left.', playAgain:'Play again',
+  c_world:'World', c_eu:'Europe', c_as:'Asia', c_af:'Africa', c_na:'North America', c_sa:'South America', c_oc:'Oceania', continent:'Continent', countryTime:'Time', attemptsLeft:'Attempts left: {n}', countryCorrect:'Correct! {name} +{points} points.', countryWrong:'Wrong! Try again. Attempts left: {n}.', flagTimeout:'Time is up! No points this round.', flagPoints:'{points} points for this answer.'
+},
+fi:{
+  tagline:'Sinut pudotetaan johonkin päin maailmaa. Katso ympärillesi, selvitä missä olet ja merkitse arvauksesi kartalle.',
+  themeLabel:'Teema', themeDark:'Tumma', themeLight:'Vaalea', themeOcean:'Merensininen', gameType:'Pelimuoto', gameClassic:'Klassinen StreetGuessr', gameNmpz:'NMPZ (ei liikkumista, panorointia eikä zoomausta)', gameFlags:'Lippuhaaste', gameBattle:'Battle Royale -maat', gameCountry:'Maahaaste',
+  map:'Kartta', area:'Alue', catAll:'Kaikkialta', catCapital:'Pääkaupunki', catCities:'Isot kaupungit',
+  rounds:'Kierrokset', time:'Aikaraja / kierros', noLimit:'Ei rajaa', moving:'Liikkuminen', moveYes:'Saa liikkua', moveNo:'Ei liikkumista',
+  play:'Pelaa', best:'Ennätyksesi ({what}, {n} kierrosta): {pts} p',
+  round:'Kierros', score:'Pisteet', timeLab:'Aika', home:'⟲ Alkuun', homeTitle:'Palaa kierroksen alkupisteeseen',
+  quit:'✕ Lopeta', quitConfirm:'Lopetetaanko peli?',
+  placePin:'Aseta pinni kartalle', guess:'Arvaa!', pinTitle:'Pidä kartta auki',
+  searching:'Etsitään sijaintia…', retrying:'Kuva ei latautunut, haetaan toinen…',
+  roundScore:'Kierroksen pisteet', yourGuess:'Arvauksesi oli', away:'{d} päässä', timeUp:'Aika loppui', noGuess:'Et ehtinyt arvata',
+  next:'Seuraava kierros →', showResults:'Näytä tulokset →',
+  finTitle:'Peli ohi', totalOf:'{a} / {b} pistettä · {name}', newBest:'🏆 Uusi ennätys!',
+  thRound:'Kierros', thDist:'Etäisyys', thPts:'Pisteet', roundN:'Kierros {n}', again:'Pelaa uudestaan', toSettings:'Asetuksiin',
+  errToken:'Mapillary-avainta ei ole asetettu.', errKey:'Mapillary hylkäsi avaimen.',
+  errNet:'Yhteys Mapillaryyn ei toimi. Tarkista nettiyhteys.',
+  errNoImages:'Katukuvia ei löytynyt täältä. Kokeile toista aluetta tai luokkaa.',
+  errLoad:'Katukuvien lataus epäonnistui toistuvasti.',
+  errLibs:'Kirjastojen lataus epäonnistui. Tarkista nettiyhteys ja lataa sivu uudelleen.',
+  chooseMap:'Valitse kartta', searchPh:'Hae maata…', grpWorld:'Maailma ja maanosat', grpCountries:'Maat', noMatch:'Ei osumia',
+  credit:'Kuvat © Mapillary-käyttäjät (CC BY-SA) · Kartat © Esri',
+  mpBtn:'Moninpeli', mpTitle:'Moninpeli', yourName:'Nimesi', createRoom:'Luo huone', joinRoom:'Liity huoneeseen',
+  roomCodePh:'HUONEKOODI', or:'tai', cancel:'Peruuta', roomCode:'Huonekoodi', copyLink:'Kopioi linkki', copied:'Kopioitu!',
+  players:'Pelaajat', host:'Isäntä', you:'sinä', mode:'Pelitila', modeClassic:'Klassinen (kaikki yhtä aikaa)', modeDuel:'Kaksintaistelu (1v1, elämäpisteet)',
+  startGame:'Aloita peli', leaveRoom:'Poistu huoneesta', needPlayers:'Aloittamiseen tarvitaan vähintään 2 pelaajaa.', duelNeeds2:'Kaksintaistelu vaatii täsmälleen 2 pelaajaa.',
+  waitHostStart:'Odotetaan, että isäntä aloittaa pelin…', waitHostNext:'Odotetaan isäntää…', waitOthers:'Odotetaan muita…',
+  errRoom:'Huonetta ei löytynyt. Tarkista koodi.', errBusy:'Peli on jo alkanut.', errFull:'Huone on täynnä.',
+  errHostLeft:'Isäntä poistui pelistä.', errCode:'Syötä huonekoodi.', errSignal:'Yhteyspalvelimeen ei saatu yhteyttä. Yritä uudelleen.',
+  errPeerLib:'Moninpelikirjaston lataus epäonnistui. Tarkista nettiyhteys ja lataa sivu uudelleen.',
+  hp:'EP', thPlayer:'Pelaaja', mpTotal:'Yhteensä', multiplier:'Vahinkokerroin ×{m}', youWon:'🏆 Voitit!', backToLobby:'Takaisin aulaan',
+  countryNext:'Seuraava →', countryMapError:'Maanrajojen lataus epäonnistui. Tarkista nettiyhteys ja lataa sivu uudelleen.', findCountry:'Etsi kartalta tämä maa', whichFlag:'Minkä maan lippu?', clickCountry:'Klikkaa kartalta oikeaa maata.', clickFlagCountry:'Klikkaa kartalta lipun maata.', countryCorrect:'Oikein! {name} +100 pistettä.', countryWrong:'Väärin! Klikkasit maata {picked}. Oikea vastaus: {name}.', countryFinished:'Peli ohi! Sait {score} pistettä.', livesOver:'Elämät loppuivat.', playAgain:'Pelaa uudestaan',
+  c_world:'Maailma', c_eu:'Eurooppa', c_as:'Aasia', c_af:'Afrikka', c_na:'Pohjois-Amerikka', c_sa:'Etelä-Amerikka', c_oc:'Oseania', continent:'Maanosa', countryTime:'Aika', attemptsLeft:'Yrityksiä jäljellä: {n}', countryCorrect:'Oikein! {name} +{points} pistettä.', countryWrong:'Väärin! Yritä uudelleen. Yrityksiä jäljellä: {n}.', flagTimeout:'Aika loppui! Tästä kierroksesta ei pisteitä.', flagPoints:'Tästä vastauksesta {points} pistettä.'
+},
+es:{
+  tagline:'Te dejamos en algún lugar del planeta. Mira a tu alrededor, averigua dónde estás y marca tu respuesta en el mapa.',
+  themeLabel:'Tema', themeDark:'Oscuro', themeLight:'Claro', themeOcean:'Océano', gameType:'Modo de juego', gameClassic:'StreetGuessr clásico', gameNmpz:'NMPZ (sin movimiento, panorámica ni zoom)', gameFlags:'Desafío de banderas', gameBattle:'Battle Royale de países', gameCountry:'Desafío de países',
+  map:'Mapa', area:'Zona', catAll:'Todo el mapa', catCapital:'Capital', catCities:'Grandes ciudades',
+  rounds:'Rondas', time:'Tiempo por ronda', noLimit:'Sin límite', moving:'Movimiento', moveYes:'Se puede mover', moveNo:'Sin moverse',
+  play:'Jugar', best:'Tu récord ({what}, {n} rondas): {pts} pts',
+  round:'Ronda', score:'Puntos', timeLab:'Tiempo', home:'⟲ Inicio', homeTitle:'Volver al punto de partida de la ronda',
+  quit:'✕ Salir', quitConfirm:'¿Salir de la partida?',
+  placePin:'Coloca un marcador en el mapa', guess:'¡Adivinar!', pinTitle:'Mantener el mapa abierto',
+  searching:'Buscando una ubicación…', retrying:'La imagen no cargó, probando otra…',
+  roundScore:'Puntos de la ronda', yourGuess:'Tu respuesta estaba a', away:'{d} de distancia', timeUp:'Se acabó el tiempo', noGuess:'No respondiste a tiempo',
+  next:'Siguiente ronda →', showResults:'Ver resultados →',
+  finTitle:'Fin del juego', totalOf:'{a} / {b} puntos · {name}', newBest:'🏆 ¡Nuevo récord personal!',
+  thRound:'Ronda', thDist:'Distancia', thPts:'Puntos', roundN:'Ronda {n}', again:'Jugar de nuevo', toSettings:'Ajustes',
+  errToken:'No hay ninguna clave de Mapillary configurada.', errKey:'Mapillary rechazó la clave.',
+  errNet:'No se puede conectar con Mapillary. Revisa tu conexión.',
+  errNoImages:'No se encontraron imágenes de calle aquí. Prueba otra zona o categoría.',
+  errLoad:'Las imágenes de calle no se cargaron tras varios intentos.',
+  errLibs:'No se pudieron cargar las bibliotecas. Revisa tu conexión y recarga la página.',
+  chooseMap:'Elige un mapa', searchPh:'Buscar país…', grpWorld:'Mundo y continentes', grpCountries:'Países', noMatch:'Sin resultados',
+  credit:'Imágenes © colaboradores de Mapillary (CC BY-SA) · Mapas © Esri',
+  mpBtn:'Multijugador', mpTitle:'Multijugador', yourName:'Tu nombre', createRoom:'Crear sala', joinRoom:'Unirse a una sala',
+  roomCodePh:'CÓDIGO', or:'o', cancel:'Cancelar', roomCode:'Código de sala', copyLink:'Copiar enlace', copied:'¡Copiado!',
+  players:'Jugadores', host:'Anfitrión', you:'tú', mode:'Modo de juego', modeClassic:'Clásico (todos a la vez)', modeDuel:'Duelo (1v1, puntos de vida)',
+  startGame:'Empezar partida', leaveRoom:'Salir de la sala', needPlayers:'Se necesitan al menos 2 jugadores para empezar.', duelNeeds2:'El duelo necesita exactamente 2 jugadores.',
+  waitHostStart:'Esperando a que el anfitrión empiece la partida…', waitHostNext:'Esperando al anfitrión…', waitOthers:'Esperando a los demás…',
+  errRoom:'Sala no encontrada. Revisa el código.', errBusy:'Esa partida ya ha empezado.', errFull:'La sala está llena.',
+  errHostLeft:'El anfitrión abandonó la partida.', errCode:'Introduce un código de sala.', errSignal:'No se pudo conectar con el servidor. Inténtalo de nuevo.',
+  errPeerLib:'No se pudo cargar la biblioteca multijugador. Revisa tu conexión y recarga la página.',
+  hp:'PV', thPlayer:'Jugador', mpTotal:'Total', multiplier:'Multiplicador de daño ×{m}', youWon:'🏆 ¡Has ganado!', backToLobby:'Volver a la sala',
+  countryNext:'Siguiente →', countryMapError:'No se pudieron cargar las fronteras. Revisa la conexión y recarga.', findCountry:'Busca este país en el mapa', whichFlag:'¿De qué país es esta bandera?', clickCountry:'Haz clic en el país correcto.', clickFlagCountry:'Haz clic en el país de la bandera.', countryCorrect:'¡Correcto! {name} +100 puntos.', countryWrong:'Incorrecto. Elegiste {picked}. Respuesta: {name}.', countryFinished:'Fin del juego. Puntuación: {score}.', livesOver:'Sin vidas.', playAgain:'Jugar de nuevo',
+  c_world:'Mundo', c_eu:'Europa', c_as:'Asia', c_af:'África', c_na:'Norteamérica', c_sa:'Sudamérica', c_oc:'Oceanía', continent:'Continente', countryTime:'Tiempo', attemptsLeft:'Intentos restantes: {n}', countryCorrect:'¡Correcto! {name} +{points} puntos.', countryWrong:'Incorrecto. Inténtalo de nuevo. Intentos restantes: {n}.', flagTimeout:'¡Se acabó el tiempo! Sin puntos esta ronda.', flagPoints:'Esta respuesta vale {points} puntos.'
+},
+fr:{
+  tagline:"Vous êtes parachuté quelque part sur Terre. Regardez autour de vous, trouvez où vous êtes et placez votre réponse sur la carte.",
+  themeLabel:'Thème', themeDark:'Sombre', themeLight:'Clair', themeOcean:'Océan', gameType:'Mode de jeu', gameClassic:'StreetGuessr classique', gameNmpz:'NMPZ (sans mouvement, panoramique ni zoom)', gameFlags:'Défi des drapeaux', gameBattle:'Battle Royale des pays', gameCountry:'Défi des pays',
+  map:'Carte', area:'Zone', catAll:'Partout', catCapital:'Capitale', catCities:'Grandes villes',
+  rounds:'Manches', time:'Temps par manche', noLimit:'Sans limite', moving:'Déplacement', moveYes:'Peut se déplacer', moveNo:'Sans déplacement',
+  play:'Jouer', best:'Votre record ({what}, {n} manches) : {pts} pts',
+  round:'Manche', score:'Score', timeLab:'Temps', home:'⟲ Départ', homeTitle:'Revenir au point de départ de la manche',
+  quit:'✕ Quitter', quitConfirm:'Quitter la partie ?',
+  placePin:'Placez une épingle sur la carte', guess:'Valider !', pinTitle:'Garder la carte ouverte',
+  searching:'Recherche d’un lieu…', retrying:'Image non chargée, nouvel essai…',
+  roundScore:'Score de la manche', yourGuess:'Votre réponse était à', away:'{d} de distance', timeUp:'Temps écoulé', noGuess:'Vous n’avez pas répondu à temps',
+  next:'Manche suivante →', showResults:'Voir les résultats →',
+  finTitle:'Partie terminée', totalOf:'{a} / {b} points · {name}', newBest:'🏆 Nouveau record personnel !',
+  thRound:'Manche', thDist:'Distance', thPts:'Points', roundN:'Manche {n}', again:'Rejouer', toSettings:'Réglages',
+  errToken:'Aucune clé Mapillary n’est configurée.', errKey:'Mapillary a refusé la clé.',
+  errNet:'Impossible de joindre Mapillary. Vérifiez votre connexion.',
+  errNoImages:'Aucune image de rue trouvée ici. Essayez une autre zone ou catégorie.',
+  errLoad:'Les images de rue n’ont pas pu être chargées à plusieurs reprises.',
+  errLibs:'Échec du chargement des bibliothèques. Vérifiez votre connexion et rechargez la page.',
+  chooseMap:'Choisir une carte', searchPh:'Rechercher un pays…', grpWorld:'Monde et continents', grpCountries:'Pays', noMatch:'Aucun résultat',
+  credit:'Images © contributeurs Mapillary (CC BY-SA) · Cartes © Esri',
+  mpBtn:'Multijoueur', mpTitle:'Multijoueur', yourName:'Votre nom', createRoom:'Créer un salon', joinRoom:'Rejoindre un salon',
+  roomCodePh:'CODE', or:'ou', cancel:'Annuler', roomCode:'Code du salon', copyLink:'Copier le lien', copied:'Copié !',
+  players:'Joueurs', host:'Hôte', you:'vous', mode:'Mode de jeu', modeClassic:'Classique (tous en même temps)', modeDuel:'Duel (1v1, points de vie)',
+  startGame:'Lancer la partie', leaveRoom:'Quitter le salon', needPlayers:'Il faut au moins 2 joueurs pour commencer.', duelNeeds2:'Le duel nécessite exactement 2 joueurs.',
+  waitHostStart:'En attente du lancement par l’hôte…', waitHostNext:'En attente de l’hôte…', waitOthers:'En attente des autres…',
+  errRoom:'Salon introuvable. Vérifiez le code.', errBusy:'Cette partie a déjà commencé.', errFull:'Le salon est complet.',
+  errHostLeft:'L’hôte a quitté la partie.', errCode:'Saisissez un code de salon.', errSignal:'Impossible de joindre le serveur de connexion. Réessayez.',
+  errPeerLib:'La bibliothèque multijoueur n’a pas pu être chargée. Vérifiez votre connexion et rechargez la page.',
+  hp:'PV', thPlayer:'Joueur', mpTotal:'Total', multiplier:'Multiplicateur de dégâts ×{m}', youWon:'🏆 Vous avez gagné !', backToLobby:'Retour au salon',
+  countryNext:'Suivant →', countryMapError:'Impossible de charger les frontières. Vérifiez la connexion et rechargez.', findCountry:'Trouvez ce pays sur la carte', whichFlag:'À quel pays appartient ce drapeau ?', clickCountry:'Cliquez sur le bon pays.', clickFlagCountry:'Cliquez sur le pays du drapeau.', countryCorrect:'Correct ! {name} +100 points.', countryWrong:'Incorrect. Vous avez choisi {picked}. Réponse : {name}.', countryFinished:'Partie terminée. Score : {score}.', livesOver:'Plus de vies.', playAgain:'Rejouer',
+  c_world:'Monde', c_eu:'Europe', c_as:'Asie', c_af:'Afrique', c_na:'Amérique du Nord', c_sa:'Amérique du Sud', c_oc:'Océanie', continent:'Continent', countryTime:'Temps', attemptsLeft:'Essais restants : {n}', countryCorrect:'Correct ! {name} +{points} points.', countryWrong:'Incorrect. Réessayez. Essais restants : {n}.', flagTimeout:'Temps écoulé ! Aucun point pour ce tour.', flagPoints:'Cette réponse vaut {points} points.'
+}};
+const LOCALES = {en:'en-US', fi:'fi-FI', es:'es-ES', fr:'fr-FR'};
+
+/* ================== COUNTRY DATA ==================
+   [ISO code, continent, bbox [minLat,minLon,maxLat,maxLon], capital [lat,lon], big cities [[lat,lon],...]] */
+const RAW = [
+// ---- Europe
+['AL','eu',[39.6,19.3,42.7,21.1],[41.33,19.82],[[41.32,19.45],[42.07,19.51],[40.47,19.49]]],
+['AD','eu',[42.43,1.41,42.66,1.79],[42.51,1.52],[]],
+['AT','eu',[46.37,9.53,49.02,17.16],[48.21,16.37],[[47.07,15.44],[48.31,14.29],[47.81,13.04],[47.27,11.39]]],
+['BY','eu',[51.26,23.18,56.17,32.78],[53.90,27.57],[[52.43,31.0],[52.10,23.70],[53.68,23.83],[55.19,30.20]]],
+['BE','eu',[49.50,2.55,51.50,6.40],[50.85,4.35],[[51.22,4.40],[51.05,3.72],[50.63,5.57],[51.21,3.22]]],
+['BA','eu',[42.56,15.72,45.28,19.62],[43.86,18.41],[[44.77,17.19],[43.34,17.81],[44.54,18.67]]],
+['BG','eu',[41.24,22.36,44.22,28.61],[42.70,23.32],[[42.15,24.75],[43.21,27.92],[42.50,27.47]]],
+['HR','eu',[42.39,13.49,46.55,19.45],[45.81,15.98],[[43.51,16.44],[45.33,14.44],[45.55,18.69],[42.65,18.09]]],
+['CY','eu',[34.57,32.27,35.70,34.60],[35.17,33.36],[[34.68,33.04],[34.92,33.62]]],
+['CZ','eu',[48.55,12.09,51.06,18.86],[50.08,14.44],[[49.20,16.61],[49.82,18.26],[49.75,13.38]]],
+['DK','eu',[54.56,8.07,57.75,12.69],[55.68,12.57],[[56.16,10.21],[55.40,10.39],[57.05,9.92]]],
+['EE','eu',[57.51,21.76,59.68,28.21],[59.44,24.75],[[58.38,26.72],[59.38,28.19],[58.38,24.50]]],
+['FI','eu',[59.8,20.5,70.1,31.6],[60.17,24.94],[[61.50,23.76],[60.45,22.27],[65.01,25.47],[62.24,25.75],[62.89,27.68],[66.50,25.72],[60.21,24.66]]],
+['FR','eu',[41.3,-5.2,51.1,9.6],[48.86,2.35],[[43.30,5.37],[45.76,4.84],[43.60,1.44],[43.70,7.27],[44.84,-0.58],[48.57,7.75]]],
+['DE','eu',[47.27,5.87,55.06,15.04],[52.52,13.40],[[53.55,9.99],[48.14,11.58],[50.94,6.96],[50.11,8.68],[48.78,9.18],[51.05,13.74]]],
+['GR','eu',[34.80,19.37,41.75,29.65],[37.98,23.73],[[40.64,22.94],[38.25,21.73],[35.34,25.14]]],
+['HU','eu',[45.74,16.11,48.59,22.90],[47.50,19.04],[[47.53,21.63],[46.25,20.15],[46.07,18.23]]],
+['IS','eu',[63.3,-24.5,66.6,-13.5],[64.15,-21.94],[[65.68,-18.09],[64.00,-22.56]]],
+['IE','eu',[51.42,-10.48,55.38,-6.0],[53.35,-6.26],[[51.90,-8.47],[53.27,-9.05],[52.66,-8.63]]],
+['IT','eu',[36.65,6.63,47.09,18.52],[41.90,12.50],[[45.46,9.19],[40.85,14.27],[45.07,7.69],[43.77,11.26],[38.12,13.36],[45.44,12.32]]],
+['LV','eu',[55.67,20.97,57.97,28.24],[56.95,24.11],[[55.87,26.54],[56.51,21.01]]],
+['LI','eu',[47.05,9.47,47.27,9.64],[47.14,9.52],[]],
+['LT','eu',[53.90,20.95,56.45,26.84],[54.69,25.28],[[54.90,23.90],[55.71,21.14]]],
+['LU','eu',[49.45,5.73,50.18,6.53],[49.61,6.13],[]],
+['MT','eu',[35.80,14.18,36.09,14.58],[35.90,14.51],[]],
+['MD','eu',[45.47,26.62,48.49,30.13],[47.01,28.86],[[47.76,27.93]]],
+['MC','eu',[43.72,7.41,43.75,7.44],[43.74,7.42],[]],
+['ME','eu',[41.85,18.43,43.56,20.36],[42.44,19.26],[[42.42,18.77]]],
+['NL','eu',[50.75,3.36,53.55,7.23],[52.37,4.90],[[51.92,4.48],[52.08,4.30],[52.09,5.12],[51.44,5.47]]],
+['MK','eu',[40.85,20.45,42.37,23.04],[41.99,21.43],[[41.03,21.34]]],
+['NO','eu',[57.9,4.5,71.2,31.1],[59.91,10.75],[[60.39,5.32],[63.43,10.40],[58.97,5.73],[69.65,18.96]]],
+['PL','eu',[49.0,14.12,54.84,24.15],[52.23,21.01],[[50.06,19.94],[51.76,19.46],[51.11,17.04],[54.35,18.65],[52.41,16.93]]],
+['PT','eu',[36.96,-9.52,42.15,-6.19],[38.72,-9.14],[[41.15,-8.61],[37.02,-7.93],[40.21,-8.43]]],
+['RO','eu',[43.62,20.26,48.27,29.69],[44.43,26.10],[[46.77,23.59],[45.75,21.23],[47.16,27.59],[44.18,28.65]]],
+['RU','eu',[41.2,27.3,77.7,180],[55.76,37.62],[[59.93,30.34],[55.03,82.92],[56.84,60.61],[55.80,49.11],[43.12,131.89],[56.33,44.00],[43.60,39.73]]],
+['SM','eu',[43.89,12.40,43.99,12.52],[43.94,12.45],[]],
+['RS','eu',[42.23,18.82,46.19,23.01],[44.79,20.45],[[45.27,19.83],[43.32,21.90]]],
+['SK','eu',[47.73,16.83,49.61,22.57],[48.15,17.11],[[48.72,21.26],[49.22,18.74]]],
+['SI','eu',[45.42,13.38,46.88,16.61],[46.06,14.51],[[46.55,15.65]]],
+['ES','eu',[36.0,-9.3,43.79,3.33],[40.42,-3.70],[[41.39,2.17],[39.47,-0.38],[37.39,-5.98],[43.26,-2.93],[36.72,-4.42]]],
+['SE','eu',[55.34,11.1,69.06,24.17],[59.33,18.07],[[57.71,11.97],[55.60,13.00],[59.86,17.64],[63.83,20.26]]],
+['CH','eu',[45.82,5.96,47.81,10.49],[46.95,7.45],[[47.38,8.54],[46.20,6.14],[47.56,7.59],[46.52,6.63]]],
+['UA','eu',[44.39,22.14,52.38,40.23],[50.45,30.52],[[49.99,36.23],[46.48,30.73],[49.84,24.03],[48.46,35.05]]],
+['GB','eu',[49.9,-8.2,60.9,1.77],[51.51,-0.13],[[53.48,-2.24],[52.49,-1.89],[55.95,-3.19],[55.86,-4.25],[51.48,-3.18],[54.60,-5.93]]],
+// ---- Asia
+['AF','as',[29.4,60.5,38.5,74.9],[34.53,69.17],[[31.61,65.71],[34.35,62.20]]],
+['AM','as',[38.84,43.45,41.30,46.63],[40.18,44.51],[[40.79,43.84]]],
+['AZ','as',[38.39,44.77,41.91,50.39],[40.41,49.87],[[40.68,46.36]]],
+['BH','as',[25.8,50.4,26.3,50.8],[26.23,50.59],[]],
+['BD','as',[20.6,88.0,26.6,92.7],[23.81,90.41],[[22.36,91.78],[22.85,89.54],[24.90,91.87]]],
+['BT','as',[26.7,88.7,28.3,92.1],[27.47,89.64],[[27.43,89.41]]],
+['BN','as',[4.0,114.1,5.05,115.4],[4.89,114.94],[]],
+['KH','as',[10.4,102.3,14.7,107.6],[11.56,104.92],[[13.36,103.86],[13.10,103.20]]],
+['CN','as',[18.2,73.5,53.6,134.8],[39.90,116.41],[[31.23,121.47],[23.13,113.26],[22.54,114.06],[30.57,104.07],[30.59,114.31],[34.34,108.94]]],
+['GE','as',[41.05,40.0,43.59,46.73],[41.72,44.79],[[41.65,41.64],[42.27,42.70]]],
+['IN','as',[6.7,68.1,35.5,97.4],[28.61,77.21],[[19.08,72.88],[12.97,77.59],[22.57,88.36],[13.08,80.27],[17.38,78.48],[23.02,72.57]]],
+['ID','as',[-11.0,95.0,6.1,141.0],[-6.21,106.85],[[-7.25,112.75],[-6.92,107.61],[3.59,98.67],[-8.65,115.22],[-5.15,119.43]]],
+['IR','as',[25.06,44.03,39.78,63.32],[35.69,51.39],[[36.30,59.60],[32.65,51.67],[29.59,52.58],[38.08,46.29]]],
+['IQ','as',[29.06,38.79,37.38,48.57],[33.31,44.37],[[30.51,47.78],[36.34,43.13],[36.19,44.01]]],
+['IL','as',[29.5,34.27,33.34,35.9],[31.77,35.21],[[32.09,34.78],[32.79,34.99],[31.25,34.79]]],
+['JP','as',[24.0,122.9,45.6,145.8],[35.68,139.69],[[34.69,135.50],[35.01,135.77],[35.18,136.91],[43.06,141.35],[33.59,130.40],[34.39,132.45]]],
+['JO','as',[29.18,34.96,33.38,39.30],[31.95,35.93],[[29.53,35.01],[32.56,35.85]]],
+['KZ','as',[40.57,46.49,55.44,87.36],[51.17,71.43],[[43.24,76.89],[42.32,69.59],[49.81,73.10]]],
+['KW','as',[28.5,46.5,30.1,48.5],[29.38,47.99],[]],
+['KG','as',[39.17,69.27,43.27,80.23],[42.87,74.59],[[40.53,72.80]]],
+['LA','as',[13.9,100.1,22.5,107.7],[17.97,102.63],[[19.89,102.13]]],
+['LB','as',[33.05,35.1,34.69,36.62],[33.89,35.50],[[34.44,35.83]]],
+['MY','as',[0.85,99.6,7.4,119.3],[3.14,101.69],[[5.41,100.33],[1.49,103.74],[5.98,116.07],[1.55,110.34]]],
+['MV','as',[-0.7,72.6,7.1,73.8],[4.18,73.51],[]],
+['MN','as',[41.58,87.74,52.15,119.93],[47.89,106.91],[[49.03,104.08]]],
+['MM','as',[9.8,92.2,28.5,101.2],[19.76,96.08],[[16.84,96.17],[21.97,96.08]]],
+['NP','as',[26.35,80.06,30.45,88.2],[27.72,85.32],[[28.21,83.99]]],
+['KP','as',[37.67,124.2,43.0,130.7],[39.04,125.76],[]],
+['OM','as',[16.65,52.0,26.4,59.8],[23.59,58.41],[[17.02,54.09]]],
+['PK','as',[23.6,60.9,37.1,77.8],[33.68,73.05],[[24.86,67.01],[31.55,74.34],[31.42,73.08],[34.01,71.58]]],
+['PH','as',[4.6,116.9,21.2,126.6],[14.60,120.98],[[10.32,123.89],[7.19,125.46],[14.68,121.04]]],
+['QA','as',[24.47,50.75,26.2,51.65],[25.29,51.53],[]],
+['SA','as',[16.4,34.5,32.2,55.7],[24.71,46.68],[[21.54,39.17],[21.39,39.86],[26.43,50.10]]],
+['SG','as',[1.2,103.6,1.47,104.05],[1.35,103.82],[]],
+['KR','as',[33.1,124.6,38.6,131.9],[37.57,126.98],[[35.18,129.08],[37.46,126.71],[35.87,128.60],[33.50,126.53]]],
+['LK','as',[5.9,79.5,9.85,81.9],[6.93,79.86],[[7.29,80.63],[6.03,80.22]]],
+['SY','as',[32.3,35.7,37.3,42.4],[33.51,36.29],[[36.20,37.16]]],
+['TW','as',[21.9,120.0,25.3,122.0],[25.03,121.57],[[22.63,120.30],[24.15,120.67],[22.99,120.21]]],
+['TJ','as',[36.67,67.34,41.05,75.14],[38.56,68.77],[]],
+['TH','as',[5.6,97.3,20.5,105.6],[13.76,100.50],[[18.79,98.98],[7.88,98.39],[12.93,100.88],[16.43,102.83]]],
+['TL','as',[-9.5,124.0,-8.1,127.3],[-8.56,125.57],[]],
+['TR','as',[35.8,25.7,42.1,44.8],[39.93,32.86],[[41.01,28.98],[38.42,27.14],[36.90,30.70],[40.19,29.06]]],
+['TM','as',[35.14,52.44,42.80,66.68],[37.96,58.33],[]],
+['AE','as',[22.6,51.5,26.1,56.4],[24.45,54.38],[[25.20,55.27],[25.35,55.40]]],
+['UZ','as',[37.17,55.99,45.58,73.13],[41.30,69.24],[[39.65,66.96],[39.77,64.42]]],
+['VN','as',[8.4,102.1,23.4,109.5],[21.03,105.85],[[10.82,106.63],[16.05,108.20],[20.84,106.69]]],
+['YE','as',[12.1,42.5,19.0,54.5],[15.37,44.19],[[12.78,45.04]]],
+// ---- Africa
+['DZ','af',[18.97,-8.67,37.1,11.98],[36.75,3.06],[[35.70,-0.63],[36.37,6.61]]],
+['AO','af',[-18.04,11.68,-4.38,24.08],[-8.84,13.23],[[-12.78,15.74],[-12.35,13.54]]],
+['BJ','af',[6.23,0.77,12.42,3.85],[6.50,2.63],[[6.37,2.39]]],
+['BW','af',[-26.9,19.99,-17.78,29.37],[-24.65,25.91],[[-21.17,27.51]]],
+['BF','af',[9.4,-5.52,15.08,2.4],[12.37,-1.52],[[11.18,-4.30]]],
+['BI','af',[-4.47,28.99,-2.31,30.85],[-3.43,29.93],[[-3.38,29.36]]],
+['CV','af',[14.8,-25.4,17.2,-22.7],[14.93,-23.51],[]],
+['CM','af',[1.65,8.49,13.08,16.19],[3.85,11.50],[[4.05,9.77]]],
+['CF','af',[2.2,14.4,11.0,27.46],[4.36,18.56],[]],
+['TD','af',[7.44,13.47,23.45,24.0],[12.13,15.05],[]],
+['KM','af',[-12.4,43.2,-11.35,44.55],[-11.70,43.26],[]],
+['CG','af',[-5.03,11.2,3.7,18.65],[-4.27,15.28],[[-4.78,11.86]]],
+['CD','af',[-13.46,12.2,5.39,31.3],[-4.44,15.27],[[-11.66,27.48],[-1.68,29.22]]],
+['CI','af',[4.36,-8.6,10.74,-2.49],[6.82,-5.28],[[5.36,-4.01]]],
+['DJ','af',[10.9,41.8,12.7,43.4],[11.59,43.15],[]],
+['EG','af',[22.0,24.7,31.67,36.9],[30.04,31.24],[[31.20,29.92],[25.69,32.64],[24.09,32.90]]],
+['GQ','af',[-1.5,8.4,3.8,11.34],[3.75,8.78],[]],
+['ER','af',[12.36,36.44,18.0,43.14],[15.32,38.93],[]],
+['SZ','af',[-27.32,30.79,-25.72,32.14],[-26.31,31.14],[]],
+['ET','af',[3.4,33.0,14.9,48.0],[9.03,38.74],[[9.59,41.87],[13.50,39.47]]],
+['GA','af',[-3.98,8.7,2.32,14.5],[0.42,9.47],[]],
+['GM','af',[13.06,-16.83,13.83,-13.8],[13.45,-16.58],[]],
+['GH','af',[4.74,-3.26,11.17,1.2],[5.60,-0.19],[[6.69,-1.62],[9.40,-0.84]]],
+['GN','af',[7.19,-14.93,12.68,-7.64],[9.64,-13.58],[]],
+['GW','af',[10.9,-16.7,12.7,-13.6],[11.86,-15.60],[]],
+['KE','af',[-4.68,33.9,5.0,41.9],[-1.29,36.82],[[-4.04,39.67],[-0.09,34.77],[-0.30,36.07]]],
+['LS','af',[-30.67,27.0,-28.57,29.46],[-29.31,27.48],[]],
+['LR','af',[4.35,-11.5,8.55,-7.37],[6.30,-10.80],[]],
+['LY','af',[19.5,9.3,33.17,25.15],[32.89,13.19],[[32.12,20.07]]],
+['MG','af',[-25.6,43.2,-11.95,50.5],[-18.91,47.54],[[-18.15,49.40],[-15.72,46.32]]],
+['MW','af',[-17.13,32.67,-9.37,35.92],[-13.96,33.79],[[-15.79,35.01]]],
+['ML','af',[10.16,-12.24,25.0,4.24],[12.64,-8.00],[]],
+['MR','af',[14.7,-17.07,27.3,-4.83],[18.08,-15.98],[]],
+['MU','af',[-20.53,57.3,-19.97,57.8],[-20.16,57.50],[]],
+['MA','af',[27.67,-13.17,35.92,-1.0],[34.02,-6.84],[[33.57,-7.59],[31.63,-8.01],[34.03,-5.00],[35.76,-5.80]]],
+['MZ','af',[-26.87,30.2,-10.47,40.84],[-25.97,32.57],[[-19.84,34.84],[-15.12,39.27]]],
+['NA','af',[-28.97,11.7,-16.96,25.26],[-22.56,17.08],[[-22.96,14.51]]],
+['NE','af',[11.7,0.17,23.52,15.99],[13.51,2.11],[]],
+['NG','af',[4.27,2.67,13.89,14.68],[9.06,7.49],[[6.52,3.38],[12.00,8.52],[7.38,3.95],[4.82,7.03]]],
+['RW','af',[-2.84,28.86,-1.05,30.9],[-1.95,30.06],[]],
+['ST','af',[0.0,6.4,1.7,7.5],[0.34,6.73],[]],
+['SN','af',[12.3,-17.54,16.7,-11.35],[14.72,-17.47],[[14.85,-15.88],[16.02,-16.50]]],
+['SC','af',[-4.8,55.2,-3.7,56.0],[-4.62,55.45],[]],
+['SL','af',[6.9,-13.3,10.0,-10.27],[8.48,-13.23],[]],
+['SO','af',[-1.7,40.99,11.99,51.4],[2.05,45.32],[[9.56,44.06]]],
+['ZA','af',[-34.84,16.45,-22.13,32.9],[-25.75,28.19],[[-26.20,28.05],[-33.92,18.42],[-29.86,31.02],[-33.96,25.60]]],
+['SS','af',[3.49,23.44,12.24,35.95],[4.86,31.58],[]],
+['SD','af',[8.68,21.8,23.15,38.6],[15.50,32.56],[[19.62,37.22]]],
+['TZ','af',[-11.75,29.3,-0.99,40.44],[-6.16,35.75],[[-6.79,39.21],[-3.37,36.68],[-2.52,32.90],[-6.16,39.20]]],
+['TG','af',[6.1,-0.15,11.14,1.8],[6.13,1.22],[]],
+['TN','af',[30.23,7.52,37.35,11.6],[36.81,10.18],[[34.74,10.76],[35.83,10.64]]],
+['UG','af',[-1.48,29.57,4.23,35.0],[0.35,32.58],[[0.05,32.46],[2.77,32.30]]],
+['ZM','af',[-18.08,21.99,-8.22,33.7],[-15.39,28.32],[[-12.97,28.64],[-17.84,25.85]]],
+['ZW','af',[-22.42,25.24,-15.6,33.06],[-17.83,31.05],[[-20.15,28.58]]],
+// ---- North America
+['AG','na',[16.9,-62.0,17.75,-61.6],[17.12,-61.85],[]],
+['BS','na',[20.9,-79.5,27.3,-72.7],[25.05,-77.35],[]],
+['BB','na',[13.0,-59.7,13.35,-59.4],[13.10,-59.61],[]],
+['BZ','na',[15.9,-89.3,18.5,-87.5],[17.25,-88.76],[[17.50,-88.20]]],
+['CA','na',[41.7,-141.0,83.1,-52.6],[45.42,-75.70],[[43.65,-79.38],[45.50,-73.57],[49.28,-123.12],[51.05,-114.07],[53.55,-113.49]]],
+['CR','na',[8.0,-85.95,11.22,-82.55],[9.93,-84.08],[]],
+['CU','na',[19.8,-85.0,23.3,-74.1],[23.11,-82.37],[[20.02,-75.83]]],
+['DM','na',[15.2,-61.5,15.65,-61.2],[15.30,-61.39],[]],
+['DO','na',[17.5,-72.0,19.95,-68.3],[18.49,-69.93],[[19.45,-70.70]]],
+['SV','na',[13.15,-90.1,14.45,-87.7],[13.69,-89.19],[]],
+['GD','na',[11.98,-61.8,12.55,-61.6],[12.05,-61.75],[]],
+['GT','na',[13.7,-92.25,17.82,-88.2],[14.63,-90.51],[[14.56,-90.73]]],
+['HT','na',[18.0,-74.5,20.1,-71.6],[18.54,-72.34],[]],
+['HN','na',[12.98,-89.35,16.5,-83.1],[14.07,-87.19],[[15.50,-88.03]]],
+['JM','na',[17.7,-78.4,18.55,-76.2],[17.97,-76.79],[[18.47,-77.92]]],
+['MX','na',[14.5,-118.4,32.7,-86.7],[19.43,-99.13],[[20.67,-103.35],[25.69,-100.32],[21.16,-86.85],[32.51,-117.04],[19.04,-98.21]]],
+['NI','na',[10.7,-87.7,15.03,-82.6],[12.11,-86.24],[[12.44,-86.88]]],
+['PA','na',[7.2,-83.05,9.65,-77.17],[8.98,-79.52],[[9.36,-79.90]]],
+['KN','na',[17.1,-62.9,17.42,-62.5],[17.30,-62.72],[]],
+['LC','na',[13.7,-61.1,14.12,-60.87],[14.01,-60.99],[]],
+['VC','na',[12.58,-61.46,13.38,-61.1],[13.16,-61.22],[]],
+['TT','na',[10.0,-61.95,11.35,-60.5],[10.66,-61.51],[]],
+['US','na',[24.5,-125.0,49.4,-66.9],[38.91,-77.04],[[40.71,-74.01],[34.05,-118.24],[41.88,-87.63],[29.76,-95.37],[47.61,-122.33],[25.76,-80.19]]],
+// ---- South America
+['AR','sa',[-55.1,-73.6,-21.8,-53.6],[-34.60,-58.38],[[-31.42,-64.18],[-32.95,-60.64],[-32.89,-68.84],[-41.13,-71.31]]],
+['BO','sa',[-22.9,-69.65,-9.67,-57.45],[-16.50,-68.15],[[-17.78,-63.18],[-17.39,-66.16],[-19.03,-65.26]]],
+['BR','sa',[-33.75,-73.99,5.27,-34.79],[-15.79,-47.88],[[-23.55,-46.63],[-22.91,-43.17],[-12.97,-38.50],[-3.12,-60.02],[-25.43,-49.27]]],
+['CL','sa',[-55.9,-75.6,-17.5,-66.4],[-33.45,-70.67],[[-33.05,-71.62],[-36.83,-73.05],[-53.16,-70.91],[-23.65,-70.40]]],
+['CO','sa',[-4.23,-79.0,12.45,-66.87],[4.71,-74.07],[[6.24,-75.58],[3.45,-76.53],[10.39,-75.48],[10.96,-74.80]]],
+['EC','sa',[-5.0,-81.1,1.45,-75.2],[-0.18,-78.47],[[-2.17,-79.92],[-2.90,-79.00]]],
+['GY','sa',[1.2,-61.4,8.55,-56.5],[6.80,-58.16],[]],
+['PY','sa',[-27.6,-62.65,-19.3,-54.25],[-25.26,-57.58],[[-25.51,-54.61]]],
+['PE','sa',[-18.35,-81.33,-0.04,-68.65],[-12.05,-77.04],[[-13.53,-71.97],[-16.41,-71.54],[-8.11,-79.03]]],
+['SR','sa',[1.83,-58.1,6.0,-53.95],[5.85,-55.20],[]],
+['UY','sa',[-35.0,-58.45,-30.08,-53.07],[-34.90,-56.16],[[-34.96,-54.95]]],
+['VE','sa',[0.65,-73.4,12.2,-59.8],[10.48,-66.90],[[10.65,-71.64],[10.16,-68.00]]],
+// ---- Oceania
+['AU','oc',[-43.7,113.2,-10.6,153.7],[-35.28,149.13],[[-33.87,151.21],[-37.81,144.96],[-27.47,153.03],[-31.95,115.86],[-34.93,138.60]]],
+['FJ','oc',[-20.7,177.0,-12.5,180.0],[-18.14,178.44],[]],
+['NZ','oc',[-47.3,166.4,-34.4,178.6],[-41.29,174.78],[[-36.85,174.76],[-43.53,172.64],[-45.03,168.66]]],
+['PG','oc',[-11.7,140.8,-0.9,157.0],[-9.44,147.18],[[-6.72,146.99]]],
+['WS','oc',[-14.1,-172.8,-13.4,-171.4],[-13.83,-171.76],[]],
+['SB','oc',[-11.9,155.5,-6.6,162.4],[-9.43,159.95],[]],
+['TO','oc',[-21.5,-175.4,-18.5,-173.7],[-21.14,-175.20],[]],
+['VU','oc',[-20.3,166.5,-13.0,170.3],[-17.73,168.32],[]]
+];
+
+// Continent / world presets. scale = distance (km) at which the score drops to ~37 %.
+const CONT = {
+  world:{scale:1492.7, view:[25,10,2]},
+  eu:{scale:600,  bbox:[34,-25,72,45]},
+  as:{scale:1500, bbox:[-10,25,55,150]},
+  af:{scale:1300, bbox:[-35,-20,38,52]},
+  na:{scale:1300, bbox:[7,-170,72,-50]},
+  sa:{scale:1000, bbox:[-56,-82,13,-34]},
+  oc:{scale:1200, bbox:[-48,110,0,180]}
+};
+
+/* ================== HELPERS ================== */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+};
+const rand = (a,b) => a + Math.random()*(b-a);
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+function haversine(a,b){
+  const R=6371, rad=Math.PI/180;
+  const dLat=(b.lat-a.lat)*rad, dLon=(b.lng-a.lng)*rad;
+  const h=Math.sin(dLat/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+const fmtTime = s => Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); $(id).classList.add('active'); const ls=$('languageSelect'); if(ls) ls.style.display=['game','countryGame','result','final'].includes(id)?'none':''; }
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+
+const COUNTRIES = RAW.map(([code,cont,bbox,cap,cities]) => ({
+  code, cont, bbox, cap, cities,
+  diag: haversine({lat:bbox[0],lng:bbox[1]},{lat:bbox[2],lng:bbox[3]})
+}));
+const BY_CODE = Object.fromEntries(COUNTRIES.map(c=>[c.code,c]));
+
+/* ================== LANGUAGE ================== */
+let lang = 'en';
+const t = (k,v) => {
+  let s = (T[lang] && T[lang][k]) ?? T.en[k] ?? k;
+  if(v) for(const x in v) s = s.split('{'+x+'}').join(v[x]);
+  return s;
+};
+const nf = n => Number(n).toLocaleString(LOCALES[lang]);
+const fmtDist = km => km<1 ? Math.round(km*1000)+' m' : (km<100? km.toFixed(1).replace('.',lang==='en'?'.':',') : nf(Math.round(km)))+' km';
+
+let dnLocal, dnEn;
+function makeNames(){
+  try{ dnLocal = new Intl.DisplayNames([LOCALES[lang]],{type:'region'}); dnEn = new Intl.DisplayNames(['en'],{type:'region'}); }
+  catch(e){ dnLocal = dnEn = {of:c=>c}; }
+}
+const countryName = code => { try{ return dnLocal.of(code) || code; }catch(e){ return code; } };
+
+/* ================== SELECTION ================== */
+const sel = {
+  region: store.get('lg_region') || 'world',
+  cat: store.get('lg_cat') || 'all'
+};
+if(!CONT[sel.region] && !BY_CODE[sel.region]) sel.region='world';
+const regionName = key => CONT[key] ? t('c_'+key) : countryName(key);
+const catLabel = c => t(c==='all'?'catAll':c==='capital'?'catCapital':'catCities');
+
+function regionInfo(region, cat){
+  let countries, scale, bbox=null, view=null;
+  if(CONT[region]){
+    const c = CONT[region];
+    countries = region==='world' ? COUNTRIES : COUNTRIES.filter(x=>x.cont===region);
+    scale = c.scale; view = c.view || null; bbox = c.bbox || null;
+  } else {
+    const c = BY_CODE[region];
+    countries = [c]; bbox = c.bbox;
+    scale = cat==='capital' ? 10 : cat==='cities' ? Math.max(15,c.diag*0.12) : Math.max(15,c.diag*0.15);
+  }
+  return {countries, scale, bbox, view};
+}
+
+function fillSelect(id, items, value){
+  const el = $(id); el.innerHTML='';
+  items.forEach(([v,label])=>{ const o=document.createElement('option'); o.value=v; o.textContent=label; el.appendChild(o); });
+  if(value!==undefined && items.some(i=>String(i[0])===String(value))) el.value=value;
+}
+function buildSelects(){
+  fillSelect('cat',[['all',t('catAll')],['capital',t('catCapital')],['cities',t('catCities')]], sel.cat);
+  fillSelect('time',[['0',t('noLimit')],['30','30 s'],['60','60 s'],['120','2 min'],['180','3 min']], $('time').value || store.get('lg_time') || '0');
+  fillSelect('moving',[['1',t('moveYes')],['0',t('moveNo')]], $('moving').value || store.get('lg_moving') || '1');
+}
+function updateMapBtn(){ $('mapBtnName').textContent = regionName(sel.region); }
+function updateBest(){
+  const rounds = $('rounds').value;
+  const b = store.get(`lg_best_${sel.region}_${sel.cat}_${rounds}`);
+  $('bestInfo').textContent = b ? t('best',{what:`${regionName(sel.region)} · ${catLabel(sel.cat)}`, n:rounds, pts:nf(b)}) : '';
+}
+
+/* ================== MAP PICKER ================== */
+function renderMapList(){
+  const q = norm($('mapSearch').value.trim());
+  const list = $('mapList'); list.innerHTML='';
+  const add = (key,label,extra) => {
+    const cur=(pickTarget==='mp' && mp) ? mp.settings.region : sel.region;
+    const b=document.createElement('button'); b.type='button'; b.className='item'+(key===cur?' sel':'');
+    b.innerHTML=`<span></span><small></small>`; b.firstChild.textContent=label; b.lastChild.textContent=extra||'';
+    b.addEventListener('click',()=>{
+      if(pickTarget==='mp'){ if(mp && mp.isHost){ mp.settings.region=key; broadcastLobby(); } closeMapPicker(); return; }
+      sel.region=key; store.set('lg_region',key); closeMapPicker(); updateMapBtn(); updateBest();
+    });
+    list.appendChild(b);
+  };
+  const grp = txt => { const d=document.createElement('div'); d.className='grp'; d.textContent=txt; list.appendChild(d); };
+  const conts = Object.keys(CONT).filter(k=>!q || norm(t('c_'+k)).includes(q) || norm(T.en['c_'+k]).includes(q));
+  const ctrs = COUNTRIES.map(c=>({c, name:countryName(c.code), en:(()=>{try{return dnEn.of(c.code)}catch(e){return c.code}})()}))
+    .filter(x=>!q || norm(x.name).includes(q) || norm(x.en).includes(q) || x.c.code.toLowerCase()===q)
+    .sort((a,b)=>a.name.localeCompare(b.name,LOCALES[lang]));
+  if(!conts.length && !ctrs.length){ const d=document.createElement('div'); d.className='nomatch'; d.textContent=t('noMatch'); list.appendChild(d); return; }
+  if(conts.length){ grp(t('grpWorld')); conts.forEach(k=>add(k,t('c_'+k))); }
+  if(ctrs.length){ grp(t('grpCountries')); ctrs.forEach(x=>add(x.c.code,x.name,x.c.code)); }
+}
+function openMapPicker(target){
+  pickTarget=target||'sp';
+  $('mapSearch').value=''; renderMapList(); $('mapModal').classList.add('open');
+  setTimeout(()=>{ $('mapSearch').focus(); const s=document.querySelector('#mapList .item.sel'); if(s) s.scrollIntoView({block:'center'}); },30);
+}
+function closeMapPicker(){ $('mapModal').classList.remove('open'); }
+
+/* ================== GAME STATE ================== */
+let cfg, state, viewer=null, pendingLoc=null, usedIds=new Set();
+let miniMap, miniMarker=null, resMap, resLayer, timerInt=null, roundActive=false;
+let lastErr=null, lastRes=null, loadKey='searching';
+
+class AppError extends Error{ constructor(key){ super(key); this.key=key; } }
+class FatalError extends AppError{}
+
+/* ---- API key pool ---- */
+function pickLeastUsed(pool){
+  const id = tk => 'lg_use_' + (tk.split('|')[1] || tk);
+  const counts = pool.map(tk => Number(store.get(id(tk))||0));
+  const min = Math.min(...counts);
+  const cand = pool.filter((tk,i)=>counts[i]===min);
+  const tk = cand[Math.floor(Math.random()*cand.length)];
+  store.set(id(tk), min+1);
+  return tk;
+}
+
+/* ================== LOCATION SEARCH (Mapillary Graph API) ================== */
+async function fetchJson(url, ms=9000){
+  const ctl = new AbortController(); const tm=setTimeout(()=>ctl.abort(),ms);
+  try{
+    const r = await fetch(url,{signal:ctl.signal});
+    if(r.status===400 || r.status===401 || r.status===403) throw new FatalError('errKey');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  } finally { clearTimeout(tm); }
+}
+
+function genPoint(){
+  const c = pick(cfg.info.countries);
+  let center, spread;
+  if(cfg.cat==='capital'){ center=c.cap; spread=0.06; }
+  else if(cfg.cat==='cities'){ center=pick(c.cities.length? c.cities : [c.cap]); spread=0.08; }
+  else { center=pick([c.cap,...c.cities]); spread=Math.min(0.8,Math.max(0.08,c.diag/111*0.05)); }
+  let lat = center[0] + rand(-spread,spread);
+  let lon = center[1] + rand(-spread,spread)/Math.max(0.3,Math.cos(center[0]*Math.PI/180));
+  lat = Math.min(c.bbox[2],Math.max(c.bbox[0],lat));
+  lon = Math.min(c.bbox[3],Math.max(c.bbox[1],lon));
+  return [lat,lon];
+}
+
+async function findLocation(){
+  let netFails = 0;
+  for(let attempt=0; attempt<40; attempt++){
+    const tok = pick(cfg.pool);
+    const [lat,lon] = genPoint();
+    const d = 0.035;
+    const bbox = [lon-d,lat-d,lon+d,lat+d].map(x=>x.toFixed(5)).join(',');
+    const wantPano = attempt < 20;
+    const url = `https://graph.mapillary.com/images?access_token=${encodeURIComponent(tok)}`
+      + `&fields=id,computed_geometry,geometry,is_pano&bbox=${bbox}&limit=200` + (wantPano?'&is_pano=true':'');
+    let data;
+    try{ data = await fetchJson(url); }
+    catch(e){
+      if(e instanceof FatalError){
+        cfg.pool = cfg.pool.filter(x=>x!==tok);   // drop rejected key, carry on with the rest
+        if(!cfg.pool.length) throw e;
+        continue;
+      }
+      if(++netFails>6) throw new AppError('errNet');
+      continue;
+    }
+    const items = (data.data||[]).filter(i=>!usedIds.has(i.id) && (i.computed_geometry||i.geometry));
+    if(!items.length) continue;
+    const it = pick(items);
+    const g = (it.computed_geometry||it.geometry).coordinates;
+    usedIds.add(it.id);
+    return { id: it.id, lat: g[1], lng: g[0], pano: !!it.is_pano };
+  }
+  throw new AppError('errNoImages');
+}
+function prefetch(){ pendingLoc = findLocation(); pendingLoc.catch(()=>{}); }
+
+/* ================== MAPS ================== */
+const pinIcon = (cls,mini) => L.divIcon({className:'', html:`<div class="pin ${cls} ${mini?'mini':''}"></div>`, iconSize:[22,22], iconAnchor:[11,22]});
+// Esri World Street Map: no key needed, works when the page is opened from a file
+const tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const tileOpts = {maxZoom:19, attribution:'Tiles © Esri'};
+
+function initMaps(){
+  if(!miniMap){
+    miniMap = L.map('miniMap',{zoomControl:false, attributionControl:false, worldCopyJump:true, minZoom:1});
+    L.tileLayer(tileUrl,tileOpts).addTo(miniMap);
+    miniMap.on('click', e=>{ if(roundActive) setGuess(e.latlng); });
+    new ResizeObserver(()=>miniMap.invalidateSize()).observe($('miniMap'));
+  }
+  if(!resMap){
+    resMap = L.map('resMap',{worldCopyJump:true, minZoom:1});
+    L.tileLayer(tileUrl,tileOpts).addTo(resMap);
+    resLayer = L.layerGroup().addTo(resMap);
+  }
+}
+function resetMiniView(){
+  const i = cfg.info;
+  if(i.view) miniMap.setView([i.view[0],i.view[1]], i.view[2], {animate:false});
+  else miniMap.fitBounds([[i.bbox[0],i.bbox[1]],[i.bbox[2],i.bbox[3]]], {animate:false});
+}
+function updateGuessBtn(){
+  const b=$('guessBtn'), has=!!(state && state.guess);
+  if(mp && mp.submitted){ b.disabled=true; b.textContent=t('waitOthers'); return; }
+  b.disabled=!has; b.textContent = has ? t('guess') : t('placePin');
+}
+function setGuess(latlng){
+  state.guess = {lat:latlng.lat, lng:((latlng.lng+540)%360)-180};
+  if(miniMarker) miniMarker.setLatLng(latlng);
+  else miniMarker = L.marker(latlng,{icon:pinIcon('guess',true)}).addTo(miniMap);
+  updateGuessBtn();
+}
+
+/* ================== GAME FLOW ================== */
+function showErr(e){
+  lastErr = e instanceof AppError ? {key:e.key} : {msg:(e && e.message) || String(e)};
+  renderErr();
+}
+function renderErr(){
+  const el=$('startErr');
+  if(!lastErr){ el.style.display='none'; return; }
+  el.textContent = lastErr.key ? t(lastErr.key) : lastErr.msg;
+  el.style.display='block';
+}
+function fail(e){ console.error(e); stopTimer(); roundActive=false; show('start'); showErr(e); }
+
+function setLoading(on,key){
+  $('loading').classList.toggle('show',on);
+  if(key){ loadKey=key; }
+  $('loadMsg').textContent = t(loadKey);
+}
+
+let nmpzInteractionLocked = false;
+async function startGame(){
+  lastErr=null; renderErr();
+  const chosenMode=$('gameMode').value;
+  if(['flags','battle'].includes(chosenMode)){ try { await startCountryMode(chosenMode); } catch(e) { console.error(e); show('start'); showErr(e); } return; }
+  nmpzInteractionLocked = chosenMode==='nmpz';
+  if(typeof L==='undefined' || typeof mapillary==='undefined'){ showErr(new AppError('errLibs')); return; }
+  const urlTok = getUrlToken();
+  const pool = urlTok ? [urlTok] : TOKEN_POOL.slice();
+  if(!pool.length){ showErr(new AppError('errToken')); return; }
+  const token = pickLeastUsed(pool);
+
+  store.set('lg_cat',sel.cat);
+  ['rounds','time','moving'].forEach(id=>store.set('lg_'+id,$(id).value));
+  cfg = { token, pool, region:sel.region, cat:sel.cat, rounds:+$('rounds').value, time:+$('time').value,
+          moving:chosenMode!=='nmpz', mode:chosenMode, info:regionInfo(sel.region, sel.cat) };
+  state = { round:0, total:0, results:[], guess:null, loc:null };
+  usedIds = new Set();
+  show('game'); initMaps();
+  setLoading(true,'searching');
+
+  try{
+    if(viewer){ try{viewer.remove();}catch(e){} viewer=null; $('viewer').innerHTML=''; }
+    viewer = new mapillary.Viewer({ accessToken:token, container:'viewer', component:{cover:false} });
+    if(!cfg.moving) lockMovement();
+    $('homeBtn').style.display = cfg.moving ? '' : 'none';
+    prefetch();
+    await nextRound();
+  }catch(e){ fail(e); }
+}
+
+function lockMovement(){
+  // NMPZ locks camera interaction as well as movement between panoramas.
+  for(const component of ['sequence','zoom','bearing','mouse','keyboard','navigation']){ try{ viewer.deactivateComponent(component); }catch(e){} }
+  try{ const kb=viewer.getComponent('keyboard'); kb.keySequenceNavigation.disable(); kb.keySpatialNavigation.disable(); }catch(e){}
+  const el=$('viewer'); el.style.touchAction='none';
+  if(!el.dataset.nmpzLocked){
+    const block=e=>{ if(!nmpzInteractionLocked)return; e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation)e.stopImmediatePropagation(); };
+    ['wheel','pointerdown','pointermove','pointerup','mousedown','mousemove','mouseup','dblclick','touchstart','touchmove'].forEach(type=>el.addEventListener(type,block,{capture:true,passive:false}));
+    el.dataset.nmpzLocked='1';
+  }
+}
+
+async function nextRound(){
+  state.round++; state.guess=null; state.loc=null;
+  $('hudRound').textContent = `${state.round} / ${cfg.rounds}`;
+  $('hudScore').textContent = nf(state.total);
+  show('game'); setLoading(true,'searching');
+  updateGuessBtn();
+  $('guessBox').classList.remove('pinned');
+  if(miniMarker){ miniMap.removeLayer(miniMarker); miniMarker=null; }
+  resetMiniView();
+  setTimeout(()=>miniMap.invalidateSize(),50);
+
+  let loc, tries=0;
+  while(true){
+    loc = await (pendingLoc || findLocation()); pendingLoc=null;
+    try{ await viewer.moveTo(loc.id); break; }
+    catch(e){
+      if(++tries>5) throw new AppError('errLoad');
+      setLoading(true,'retrying'); pendingLoc=findLocation(); pendingLoc.catch(()=>{});
+    }
+  }
+  state.loc = loc;
+  setLoading(false);
+  viewer.resize && viewer.resize();
+  if(state.round < cfg.rounds) prefetch();
+  startTimer();
+  roundActive = true;
+}
+
+function startTimer(secs){
+  stopTimer();
+  const chip = $('hudTimerChip');
+  const total = secs===undefined ? cfg.time : secs;
+  if(!total){ chip.style.display='none'; return; }
+  chip.style.display=''; chip.classList.remove('low');
+  const end = Date.now() + total*1000;
+  const tick = ()=>{
+    const left = Math.max(0,(end-Date.now())/1000);
+    $('hudTimer').textContent = fmtTime(Math.ceil(left));
+    chip.classList.toggle('low', left<=10);
+    if(left<=0){ stopTimer(); submitGuess(true); }
+  };
+  tick(); timerInt = setInterval(tick,250);
+}
+function stopTimer(){ if(timerInt){ clearInterval(timerInt); timerInt=null; } }
+
+function submitGuess(timedOut){
+  if(!roundActive) return;
+  if(!state.guess && !timedOut) return;
+  if(mp){ mpSubmitGuess(); return; }
+  roundActive=false; stopTimer();
+  const truth = {lat:state.loc.lat, lng:state.loc.lng};
+  let dist=null, pts=0;
+  if(state.guess){
+    dist = haversine(state.guess, truth);
+    pts = dist<0.025 ? 5000 : Math.round(5000*Math.exp(-dist/cfg.info.scale));
+    pts = Math.min(5000,pts);
+  }
+  state.total += pts;
+  state.results.push({dist,pts,truth,guess:state.guess});
+  lastRes = {dist, pts, noGuess: timedOut && !state.guess};
+  showResult(truth, pts);
+}
+
+function renderResultText(){
+  if(!lastRes) return;
+  $('resDist').innerHTML = lastRes.noGuess
+    ? `<small>${t('timeUp')}</small>${t('noGuess')}`
+    : `<small>${t('yourGuess')}</small>${t('away',{d:fmtDist(lastRes.dist)})}`;
+  $('nextBtn').textContent = (mp ? mp.over : state.round>=cfg.rounds) ? t('showResults') : t('next');
+}
+
+function showResult(truth, pts){
+  show('result');
+  $('mpBoard').style.display='none'; $('waitHost').style.display='none'; $('nextBtn').style.display='';
+  setTimeout(()=>{
+    resMap.invalidateSize();
+    resLayer.clearLayers();
+    L.marker([truth.lat,truth.lng],{icon:pinIcon('truth')}).addTo(resLayer);
+    const g = state.guess;
+    if(g){
+      L.marker([g.lat,g.lng],{icon:pinIcon('guess')}).addTo(resLayer);
+      L.polyline([[g.lat,g.lng],[truth.lat,truth.lng]],{color:'#fff',weight:3,dashArray:'6 8',opacity:.9}).addTo(resLayer);
+      resMap.fitBounds(L.latLngBounds([[g.lat,g.lng],[truth.lat,truth.lng]]).pad(0.4),{maxZoom:15,animate:true});
+    } else {
+      resMap.setView([truth.lat,truth.lng],8);
+    }
+  },60);
+  renderResultText();
+  const el=$('resPts'), meter=$('resMeter'); meter.style.width='0';
+  requestAnimationFrame(()=>{ meter.style.width=(pts/50)+'%'; });
+  const t0=performance.now(), dur=1100;
+  (function step(now){
+    const k=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-k,3);
+    el.textContent = nf(Math.round(pts*e));
+    if(k<1) requestAnimationFrame(step);
+  })(t0);
+}
+
+let finalBest=false;
+function renderFinal(){
+  $('finTotal').style.fontSize=''; $('againBtn').style.display=''; $('againBtn').textContent=t('again'); $('menuBtn').textContent=t('toSettings');
+  if(!state) return;
+  const max = cfg.rounds*5000;
+  $('finTotal').textContent = nf(state.total);
+  $('finSub').textContent = t('totalOf',{a:nf(state.total), b:nf(max), name:`${regionName(cfg.region)} · ${catLabel(cfg.cat)}`});
+  $('finBest').textContent = finalBest ? t('newBest') : '';
+  const rows = state.results.map((r,i)=>`<tr><td>${t('roundN',{n:i+1})}</td><td>${r.dist==null?'–':fmtDist(r.dist)}</td><td><b>${nf(r.pts)}</b></td></tr>`).join('');
+  $('finTable').innerHTML = `<tr><th>${t('thRound')}</th><th>${t('thDist')}</th><th>${t('thPts')}</th></tr>${rows}`;
+}
+function endGame(){
+  show('final');
+  const key=`lg_best_${cfg.region}_${cfg.cat}_${cfg.rounds}`, old=Number(store.get(key)||0);
+  finalBest = state.total>old && state.total>0;
+  if(state.total>old) store.set(key,state.total);
+  renderFinal(); updateBest();
+}
+
+/* ================== THEME ================== */
+function applyTheme(theme){
+  const allowed=['dark','light','ocean'];
+  if(!allowed.includes(theme)) theme='dark';
+  document.documentElement.dataset.theme=theme;
+  const picker=$('themeSelect'); if(picker && picker.value!==theme) picker.value=theme;
+  store.set('lg_theme',theme);
+}
+$('themeSelect').addEventListener('change',e=>applyTheme(e.target.value));
+applyTheme(store.get('lg_theme')||'dark');
+
+/* ================== LANGUAGE APPLY ================== */
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.title = 'LostGuessr';
+  makeNames();
+  document.querySelectorAll('[data-i18n]').forEach(e=>{ e.textContent = t(e.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-title]').forEach(e=>{ e.title = t(e.dataset.i18nTitle); });
+  $('mapSearch').placeholder = t('searchPh');
+  $('mapClose').title = t('chooseMap');
+  buildSelects(); updateMapBtn(); updateBest(); updateGuessBtn(); mpApplyLang();
+  const continentNames={world:'c_world',eu:'c_eu',as:'c_as',af:'c_af',na:'c_na',sa:'c_sa',oc:'c_oc'};
+  document.querySelectorAll('#countryContinent option').forEach(o=>{ if(continentNames[o.value]) o.textContent=t(continentNames[o.value]); });
+  const languageLabel=document.querySelector('label[for=languageSelect]'); if(languageLabel) languageLabel.textContent=lang==='fi'?'Kieli':lang==='es'?'Idioma':lang==='fr'?'Langue':'Language';
+  $('loadMsg').textContent = t(loadKey);
+  if($('result').classList.contains('active')) renderResultText();
+  if($('final').classList.contains('active')) { if(mp) mpRenderFinal(); else renderFinal(); }
+  if($('mapModal').classList.contains('open')) renderMapList();
+  renderErr();
+}
+
+/* ================== MULTIPLAYER (PeerJS, host-authoritative) ================== */
+const PEER_PREFIX = 'lostguessr-';
+const COLORS = ['#3b82f6','#ef4444','#22c55e','#f59e0b','#a855f7','#06b6d4','#ec4899','#84cc16'];
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const HP0 = 6000, MAX_PLAYERS = 8, DUEL_MAX_ROUNDS = 20;
+let mp = null, pickTarget = 'sp', mpErrKey = null, copyTimer = null;
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeColor = c => /^#[0-9a-f]{6}$/i.test(c) ? c : '#9aa1bd';
+const colorPin = c => L.divIcon({className:'', html:`<div class="pin" style="background:${safeColor(c)}"></div>`, iconSize:[22,22], iconAnchor:[11,22]});
+const validLL = (a,b) => typeof a==='number' && typeof b==='number' && isFinite(a) && isFinite(b) && Math.abs(a)<=90 && Math.abs(b)<=180;
+const newCode = () => { let s=''; for(let i=0;i<5;i++) s+=CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)]; return s; };
+
+function broadcast(msg){
+  if(!mp || !mp.isHost) return;
+  Object.values(mp.conns).forEach(c=>{ try{ c.send(msg); }catch(e){} });
+}
+function getPool(){
+  const urlTok = getUrlToken();
+  return urlTok ? [urlTok] : TOKEN_POOL.slice();
+}
+
+/* ---------- entry modal ---------- */
+function myName(){
+  let n = ($('mpName').value||'').trim();
+  if(!n) n = 'Player'+(100+Math.floor(Math.random()*900));
+  return n.slice(0,16);
+}
+function mpErr(key){
+  mpErrKey = key;
+  const el=$('mpErr'); el.textContent=t(key); el.style.display='block';
+  $('mpCreate').disabled=false; $('mpJoin').disabled=false;
+}
+function openMpModal(){
+  mpErrKey = null; $('mpErr').style.display='none';
+  if(!$('mpName').value) $('mpName').value = store.get('lg_name') || ('Player'+(100+Math.floor(Math.random()*900)));
+  $('mpCreate').disabled=false; $('mpJoin').disabled=false;
+  $('mpModal').classList.add('open');
+}
+function closeMpModal(){ $('mpModal').classList.remove('open'); }
+
+function openPeer(id){
+  return new Promise((resolve,reject)=>{
+    let done=false, peer;
+    try{ peer = id ? new Peer(id) : new Peer(); }catch(e){ reject({type:'network'}); return; }
+    const to = setTimeout(()=>{ if(done) return; done=true; try{peer.destroy();}catch(e){} reject({type:'network'}); },12000);
+    peer.on('open',()=>{ if(done) return; done=true; clearTimeout(to); resolve(peer); });
+    peer.on('error',e=>{ if(done) return; done=true; clearTimeout(to); try{peer.destroy();}catch(_){} reject(e); });
+  });
+}
+
+/* ---------- create / join ---------- */
+async function mpCreate(){
+  if(typeof Peer==='undefined'){ mpErr('errPeerLib'); return; }
+  $('mpCreate').disabled=true; $('mpJoin').disabled=true;
+  const name = myName(); store.set('lg_name',name);
+  let peer=null, code=null;
+  for(let i=0;i<6 && !peer;i++){
+    code = newCode();
+    try{ peer = await openPeer(PEER_PREFIX+code); }
+    catch(e){ if(!e || e.type!=='unavailable-id'){ mpErr('errSignal'); return; } }
+  }
+  if(!peer){ mpErr('errSignal'); return; }
+  mp = { isHost:true, code, peer, conns:{}, me:'host',
+    players:[{id:'host',name,color:COLORS[0],host:true,total:0,hp:HP0}],
+    settings:{region:sel.region,cat:sel.cat,rounds:+$('rounds').value,time:+$('time').value,moving:$('moving').value==='1',mode:'classic',gameType:$('gameMode').value},
+    phase:'lobby', round:0, guesses:{}, ready:{}, done:new Set(), submitted:false, lobbyErr:null };
+  peer.on('connection',hostOnConnection);
+  peer.on('disconnected',()=>{ try{ peer.reconnect(); }catch(e){} });
+  peer.on('error',e=>console.warn('peer error',e));
+  closeMpModal(); enterLobby();
+}
+
+async function mpJoin(){
+  if(typeof Peer==='undefined'){ mpErr('errPeerLib'); return; }
+  const code = $('mpCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(code.length<4){ mpErr('errCode'); return; }
+  $('mpCreate').disabled=true; $('mpJoin').disabled=true;
+  const name = myName(); store.set('lg_name',name);
+  let peer;
+  try{ peer = await openPeer(null); }catch(e){ mpErr('errSignal'); return; }
+  let opened=false, dead=false, to=null;
+  const abort = key => { if(dead) return; dead=true; clearTimeout(to); try{peer.destroy();}catch(e){} mpErr(key); };
+  const conn = peer.connect(PEER_PREFIX+code,{reliable:true});
+  to = setTimeout(()=>{ if(!opened) abort('errRoom'); },12000);
+  peer.on('error',e=>{ if(!opened) abort(e && e.type==='peer-unavailable' ? 'errRoom' : 'errSignal'); else console.warn(e); });
+  conn.on('open',()=>{
+    if(dead) return;
+    opened=true; clearTimeout(to);
+    mp = { isHost:false, code, peer, hostConn:conn, me:peer.id, players:[], settings:null, phase:'joining',
+           done:new Set(), submitted:false, lobbyErr:null, round:0 };
+    conn.send({t:'join',name});
+    closeMpModal();
+  });
+  conn.on('data',guestOnData);
+  conn.on('close',()=>{ if(mp && mp.hostConn===conn) leaveRoom('errHostLeft'); else if(!opened) abort('errRoom'); });
+  conn.on('error',()=>{ if(!opened) abort('errRoom'); });
+}
+
+function leaveRoom(errKey){
+  stopTimer(); roundActive=false; setLoading(false);
+  const m = mp; mp = null;
+  pendingLoc = null;
+  if(m){
+    try{
+      if(m.isHost){ Object.values(m.conns).forEach(c=>{ try{ c.send({t:'closed'}); }catch(e){} }); clearTimeout(m.dl); }
+      else { m.hostConn.close(); }
+    }catch(e){}
+    setTimeout(()=>{ try{ m.peer.destroy(); }catch(e){} }, 500);
+  }
+  show('start');
+  if(errKey) showErr(new AppError(errKey));
+}
+
+/* ---------- host: connections ---------- */
+function hostOnConnection(conn){
+  conn.on('data', d=>hostOnData(conn,d));
+  conn.on('close', ()=>hostOnLeave(conn.peer));
+  conn.on('error', ()=>hostOnLeave(conn.peer));
+}
+function rejectConn(conn,key){
+  const send = () => { try{ conn.send({t:'reject',key}); }catch(e){} setTimeout(()=>{ try{conn.close();}catch(e){} },400); };
+  if(conn.open) send(); else conn.on('open',send);
+}
+function uniqueName(n){
+  let name=n, i=2;
+  while(mp.players.some(p=>p.name===name)) name = n.slice(0,13)+' '+(i++);
+  return name;
+}
+function hostOnData(conn,d){
+  if(!mp || !mp.isHost || !d || typeof d!=='object') return;
+  const pid = conn.peer;
+  switch(d.t){
+    case 'join': {
+      if(mp.conns[pid]) return;
+      if(mp.phase!=='lobby'){ rejectConn(conn,'errBusy'); return; }
+      if(mp.players.length>=MAX_PLAYERS){ rejectConn(conn,'errFull'); return; }
+      mp.conns[pid]=conn;
+      const color = COLORS.find(c=>!mp.players.some(p=>p.color===c)) || COLORS[0];
+      mp.players.push({id:pid,name:uniqueName(String(d.name||'Player').trim().slice(0,16)||'Player'),color,host:false,total:0,hp:HP0});
+      broadcastLobby();
+      break;
+    }
+    case 'ready': hostOnReady(pid,d); break;
+    case 'guess': hostOnGuess(pid,d); break;
+    case 'countryScore': { const pl=mp.players.find(p=>p.id===pid); if(pl){ pl.total=Number(d.score)||0; pl.hp=Number(d.lives)||0; broadcast({t:'players',players:mp.players}); checkBattleRoyaleWinner(); } break; }
+  }
+}
+function hostOnLeave(pid){
+  if(!mp || !mp.isHost || !mp.conns[pid]) return;
+  delete mp.conns[pid];
+  mp.players = mp.players.filter(p=>p.id!==pid);
+  delete mp.guesses[pid]; mp.done.delete(pid);
+  if(mp.phase==='lobby'){ broadcastLobby(); return; }
+  if(mp.phase==='final'){ broadcast({t:'players',players:mp.players}); return; }
+  if(mp.players.length<2){ hostFinish(); return; }
+  broadcast({t:'players',players:mp.players}); renderStatus();
+  if(mp.phase==='guessing') hostCheckAllGuessed();
+}
+function broadcastLobby(){
+  broadcast({t:'lobby',players:mp.players,settings:mp.settings});
+  renderLobby();
+}
+
+/* ---------- lobby ---------- */
+function enterLobby(){
+  stopTimer(); roundActive=false; setLoading(false);
+  lastErr=null; renderErr();
+  show('lobby'); buildLobbySelects(); renderLobby();
+}
+function buildLobbySelects(){
+  fillSelect('lbMode',[['classic',t('modeClassic')],['duel',t('modeDuel')]]);
+  fillSelect('lbGameType',[['classic',t('gameClassic')],['nmpz',t('gameNmpz')],['flags',t('gameFlags')],]);
+  fillSelect('lbCat',[['all',t('catAll')],['capital',t('catCapital')],['cities',t('catCities')]]);
+  fillSelect('lbRounds',[['3','3'],['5','5'],['10','10']]);
+  fillSelect('lbTime',[['0',t('noLimit')],['30','30 s'],['60','60 s'],['120','2 min'],['180','3 min']]);
+  fillSelect('lbMoving',[['1',t('moveYes')],['0',t('moveNo')]]);
+}
+const setVal = (id,v) => { const el=$(id); if(el.value!==v) el.value=v; };
+function renderLobby(){
+  if(!mp || !mp.settings) return;
+  $('roomCode').textContent = mp.code;
+  $('copyBtn').textContent = t('copyLink');
+  const pl=$('lobbyPlayers'); pl.innerHTML='';
+  mp.players.forEach(p=>{
+    const d=document.createElement('div'); d.className='pl';
+    const dot=document.createElement('span'); dot.className='dot'; dot.style.background=safeColor(p.color);
+    const n=document.createElement('span'); n.textContent=p.name;
+    if(mp.settings && ['flags','battle'].includes(mp.settings.gameType||'')){ const sc=document.createElement('small'); sc.textContent=(p.total||0)+' pts'; d.append(dot,n,sc); } else d.append(dot,n);
+    const tag=[]; if(p.host) tag.push(t('host')); if(p.id===mp.me) tag.push(t('you'));
+    if(tag.length){ const s=document.createElement('small'); s.textContent=tag.join(' · '); d.append(s); }
+    pl.appendChild(d);
+  });
+  const s=mp.settings, host=mp.isHost;
+  setVal('lbMode',s.mode); setVal('lbGameType',s.gameType||'classic'); setVal('lbCat',s.cat); setVal('lbRounds',String(s.rounds));
+  setVal('lbTime',String(s.time)); setVal('lbMoving',s.moving?'1':'0');
+  ['lbMode','lbGameType','lbCat','lbRounds','lbTime','lbMoving'].forEach(id=>{ $(id).disabled=!host; });
+  $('lbMapBtn').disabled=!host;
+  $('lbMapName').textContent = regionName(s.region);
+  $('lbRoundsWrap').style.visibility = s.mode==='duel' ? 'hidden' : 'visible';
+  const n=mp.players.length;
+  let hint='', can=host;
+  if(host){
+    if(n<2){ hint=t('needPlayers'); can=false; }
+    else if(s.mode==='duel' && n!==2){ hint=t('duelNeeds2'); can=false; }
+  } else hint=t('waitHostStart');
+  $('lobbyHint').textContent=hint;
+  $('lobbyStart').style.display = host ? '' : 'none';
+  $('lobbyStart').disabled = !can;
+  const le=$('lobbyErr');
+  if(mp.lobbyErr){ le.textContent=t(mp.lobbyErr); le.style.display='block'; } else le.style.display='none';
+}
+['lbMode','lbGameType','lbCat','lbRounds','lbTime','lbMoving'].forEach(id=>$(id).addEventListener('change',()=>{
+  if(!mp || !mp.isHost) return;
+  const s=mp.settings;
+  s.mode=$('lbMode').value; s.gameType=$('lbGameType').value; s.cat=$('lbCat').value; s.rounds=+$('lbRounds').value;
+  s.time=+$('lbTime').value; s.moving=$('lbMoving').value==='1';
+  broadcastLobby();
+}));
+
+/* ---------- starting a game (all clients) ---------- */
+function mpBeginGame(settings){
+  lastErr=null; renderErr();
+  if(['flags','battle'].includes(settings.gameType||'classic')){ startCountryMode(settings.gameType, settings.countryDeck||null); return; }
+  if(settings.gameType==='nmpz') settings.moving=false;
+  if(typeof mapillary==='undefined'){ leaveRoom('errLibs'); return; }
+  const pool = getPool();
+  cfg = { token:null, pool, region:settings.region, cat:settings.cat, rounds:settings.rounds, time:settings.time,
+          moving:settings.moving, info:regionInfo(settings.region, settings.cat) };
+  state = { round:0, total:0, results:[], guess:null, loc:null };
+  usedIds = new Set(); pendingLoc = null;
+  show('game'); initMaps(); setLoading(true,'searching');
+  if(viewer){ try{viewer.remove();}catch(e){} viewer=null; $('viewer').innerHTML=''; }
+  const token = pickLeastUsed(pool);
+  viewer = new mapillary.Viewer({ accessToken:token, container:'viewer', component:{cover:false} });
+  if(!cfg.moving) lockMovement();
+  $('homeBtn').style.display = cfg.moving ? '' : 'none';
+  mp.done = new Set(); mp.submitted=false; mp.over=false;
+  renderStatus();
+}
+function mpResetRound(round){
+  state.round=round; state.guess=null; roundActive=false; stopTimer();
+  mp.submitted=false; mp.done=new Set();
+  show('game'); setLoading(true,'searching');
+  updateHud(); updateGuessBtn();
+  $('hudTimerChip').style.display='none';
+  $('guessBox').classList.remove('pinned');
+  if(miniMarker){ miniMap.removeLayer(miniMarker); miniMarker=null; }
+  resetMiniView(); setTimeout(()=>miniMap.invalidateSize(),50);
+  renderStatus();
+}
+function updateHud(){
+  if(!state || !cfg) return;
+  const duel = !!(mp && mp.settings && mp.settings.mode==='duel');
+  const me = mp ? mp.players.find(p=>p.id===mp.me) : null;
+  $('hudRound').textContent = duel ? String(state.round) : `${state.round} / ${cfg.rounds}`;
+  $('hudScoreLab').textContent = duel ? t('hp') : t('score');
+  $('hudScore').textContent = nf(me ? (duel ? me.hp : me.total) : state.total);
+}
+function renderCountryMpScores(){
+  const el=$('countryMpScores'); if(!el) return;
+  if(!mp || !mp.settings || !['flags','battle'].includes(mp.settings.gameType||'')){el.style.display='none';return;}
+  el.style.display='block'; el.textContent=mp.players.map(p=>p.name+': '+(p.total||0)+' pts').join(' · ');
+}
+function renderStatus(){
+  const el=$('mpStatus'); el.innerHTML='';
+  if(!mp) return;
+  mp.players.forEach(p=>{
+    const d=document.createElement('div'); d.className='ps'+(mp.done.has(p.id)?' done':'');
+    const dot=document.createElement('span'); dot.className='dot'; dot.style.background=safeColor(p.color);
+    const n=document.createElement('span'); n.textContent=p.name;
+    if(mp.settings && ['flags','battle'].includes(mp.settings.gameType||'')){ const sc=document.createElement('small'); sc.textContent=(p.total||0)+' pts'; d.append(dot,n,sc); } else d.append(dot,n); el.appendChild(d);
+  });
+  renderCountryMpScores();
+}
+function mpMarkGuessed(pid){ if(!mp) return; mp.done.add(pid); renderStatus(); }
+
+function hostStartGame(){
+  if(!mp || !mp.isHost || mp.phase!=='lobby') return;
+  const n=mp.players.length, s=mp.settings;
+  if(n<2 || (s.mode==='duel' && n!==2)) return;
+  mp.lobbyErr=null; mp.phase='starting'; mp.round=0;
+  mp.players.forEach(p=>{ p.total=0; p.hp=HP0; });
+  if(['flags','battle'].includes(s.gameType||'classic')){ s.countryContinent=CONT[sel.region]?sel.region:($('countryContinent').value||'world'); $('countryContinent').value=s.countryContinent; const pool=COUNTRIES.filter(c=>c.code.length===2 && c.code!=='AQ' && (s.countryContinent==='world'||c.cont===s.countryContinent)); s.countryDeck=pool.slice().sort(()=>Math.random()-.5).slice(0,Math.min(s.rounds,pool.length)).map(c=>c.code); }
+  broadcast({t:'start',settings:s,players:mp.players});
+  mpBeginGame(s);
+  if(['flags','battle'].includes(s.gameType||'classic')) return;
+  hostNextRound();
+}
+
+/* ---------- host: round loop ---------- */
+const mpGuestsAllReady = () => Object.keys(mp.conns).every(pid=>pid in mp.ready);
+
+async function hostNextRound(){
+  if(!mp || !mp.isHost) return;
+  const round = ++mp.round;
+  mp.phase='prep'; mp.guesses={}; mp.ready={}; mp.loc=null;
+  clearTimeout(mp.dl); mp.dl=null;
+  mpResetRound(round);
+  const alive = () => mp && mp.isHost && mp.round===round && mp.phase==='prep';
+  try{
+    for(let att=0; att<4; att++){
+      const loc = await (pendingLoc || findLocation()); pendingLoc=null;
+      if(!alive()) return;
+      mp.loc=loc; mp.att=att; mp.ready={};
+      state.loc={id:loc.id};
+      broadcast({t:'prep',round,att,loc:{id:loc.id}});
+      const hostLoad = viewer.moveTo(loc.id).then(()=>true,()=>false);
+      const deadline = Date.now()+20000;
+      while(alive() && Date.now()<deadline && !mpGuestsAllReady()) await sleep(150);
+      const hostOk = await hostLoad;
+      if(!alive()) return;
+      const guestsOk = Object.keys(mp.conns).every(pid=>mp.ready[pid]===true);
+      if(hostOk && (guestsOk || att===3)) break;
+      if(!hostOk && att===3) throw new AppError('errLoad');
+      setLoading(true,'retrying');
+    }
+  }catch(e){ if(alive()) hostAbort(e); return; }
+  if(!alive()) return;
+  const secs = cfg.time;
+  mp.phase='guessing'; mp.endAt = secs ? Date.now()+secs*1000 : Infinity; mp.countdown=false;
+  if(mp.settings.mode==='duel' || round<cfg.rounds) prefetch();
+  broadcast({t:'go',round,secs});
+  setLoading(false); viewer.resize && viewer.resize();
+  roundActive=true; startTimer(secs);
+  mp.dl = secs ? setTimeout(hostEndRound,(secs+5)*1000) : null;
+}
+function hostAbort(e){
+  if(!mp) return;
+  console.error(e);
+  const key = e instanceof AppError ? e.key : 'errNet';
+  clearTimeout(mp.dl); roundActive=false; stopTimer(); setLoading(false);
+  mp.phase='lobby'; mp.lobbyErr=key;
+  broadcast({t:'toLobby',players:mp.players,err:key});
+  enterLobby();
+}
+function hostOnReady(pid,d){
+  if(!mp || mp.phase!=='prep' || d.round!==mp.round || d.att!==mp.att) return;
+  mp.ready[pid] = d.ok===true;
+}
+function hostOnGuess(pid,d){
+  if(!mp || mp.phase!=='guessing' || d.round!==mp.round) return;
+  if(pid in mp.guesses) return;
+  mp.guesses[pid] = validLL(d.lat,d.lng) ? {lat:d.lat,lng:d.lng} : null;
+  mp.done.add(pid);
+  broadcast({t:'guessed',pid}); renderStatus();
+  if(hostCheckAllGuessed()) return;
+  if(!mp.countdown){
+    const remaining = (mp.endAt-Date.now())/1000;
+    if(remaining>21){
+      mp.countdown=true;
+      broadcast({t:'countdown',secs:20});
+      if(roundActive) startTimer(20);
+      clearTimeout(mp.dl); mp.dl=setTimeout(hostEndRound,25000);
+    }
+  }
+}
+function hostCheckAllGuessed(){
+  if(mp.phase!=='guessing') return false;
+  if(mp.players.every(p=>p.id in mp.guesses)){ hostEndRound(); return true; }
+  return false;
+}
+function hostEndRound(){
+  if(!mp || !mp.isHost || mp.phase!=='guessing') return;
+  mp.phase='result'; clearTimeout(mp.dl); mp.dl=null;
+  const truth={lat:mp.loc.lat,lng:mp.loc.lng}, scale=cfg.info.scale;
+  const duel = mp.settings.mode==='duel';
+  const rows = mp.players.map(p=>{
+    const g = mp.guesses[p.id] || null;
+    let dist=null, pts=0;
+    if(g){ dist=haversine(g,truth); pts = dist<0.025 ? 5000 : Math.min(5000,Math.round(5000*Math.exp(-dist/scale))); }
+    return {id:p.id,name:p.name,color:p.color,guess:g,dist,pts,dmg:0};
+  });
+  let mult=1, loser=null, dmg=0;
+  if(duel && rows.length===2){
+    const [a,b]=rows;
+    mult = Math.min(3, 1+0.5*Math.floor((mp.round-1)/2));
+    dmg = Math.round(Math.abs(a.pts-b.pts)*mult);
+    loser = a.pts<b.pts ? a : b.pts<a.pts ? b : null;
+  }
+  rows.forEach(r=>{
+    const p=mp.players.find(x=>x.id===r.id);
+    p.total += r.pts;
+    if(loser===r){ p.hp=Math.max(0,p.hp-dmg); r.dmg=dmg; }
+    r.total=p.total; r.hp=p.hp;
+  });
+  const over = duel ? (mp.players.some(p=>p.hp<=0) || mp.round>=DUEL_MAX_ROUNDS) : mp.round>=mp.settings.rounds;
+  const res={t:'result',round:mp.round,truth,rows,over,mult};
+  broadcast(res);
+  mpShowResult(res);
+}
+function hostAfterResult(){
+  if(!mp || !mp.isHost) return;
+  if(mp.over) hostFinish(); else hostNextRound();
+}
+function checkBattleRoyaleWinner(){
+  if(!mp || !mp.isHost || !mp.settings || mp.settings.gameType!=='battle' || mp.phase==='final' || mp.players.length<2) return;
+  const alive=mp.players.filter(p=>Number(p.hp)>0);
+  if(alive.length<=1){
+    mp.battleWinner=alive[0] ? alive[0].id : null;
+    hostFinish();
+  }
+}
+function hostFinish(){
+  if(!mp) return;
+  clearTimeout(mp.dl); stopTimer(); roundActive=false; setLoading(false);
+  mp.phase='final';
+  broadcast({t:'final',players:mp.players});
+  mpShowFinal();
+}
+function hostToLobby(){
+  if(!mp || !mp.isHost) return;
+  mp.phase='lobby'; mp.lobbyErr=null;
+  broadcast({t:'toLobby',players:mp.players});
+  enterLobby();
+}
+
+/* ---------- guest: messages ---------- */
+function guestOnData(d){
+  if(!mp || mp.isHost || !d || typeof d!=='object') return;
+  switch(d.t){
+    case 'reject': leaveRoom(d.key==='errFull'?'errFull':'errBusy'); break;
+    case 'lobby':
+      mp.players=d.players||[]; mp.settings=d.settings; mp.phase='lobby';
+      if($('lobby').classList.contains('active')) renderLobby(); else enterLobby();
+      break;
+    case 'start': mp.settings=d.settings; mp.players=d.players||[]; mp.phase='starting'; mp.lobbyErr=null; mpBeginGame(d.settings); break;
+    case 'countryDeck': if(d.settings){ mp.settings=d.settings; restartCountryMode(); } break;
+    case 'prep': guestPrep(d); break;
+    case 'go': guestGo(d); break;
+    case 'countdown': if(roundActive && typeof d.secs==='number') startTimer(d.secs); break;
+    case 'guessed': mpMarkGuessed(d.pid); break;
+    case 'players': mp.players=d.players||[]; renderStatus(); break;
+    case 'result': mpShowResult(d); break;
+    case 'final': mp.players=d.players||[]; mp.phase='final'; mpShowFinal(); break;
+    case 'toLobby': mp.players=d.players||[]; mp.phase='lobby'; mp.lobbyErr=d.err||null; enterLobby(); break;
+    case 'closed': leaveRoom('errHostLeft'); break;
+  }
+}
+async function guestPrep(d){
+  if(!d.loc || typeof d.loc.id!=='string') return;
+  mp.round=d.round; mp.att=d.att; mp.phase='prep'; mp.loadOk=false;
+  mpResetRound(d.round);
+  state.loc={id:d.loc.id};
+  let ok=false;
+  try{ await viewer.moveTo(d.loc.id); ok=true; }catch(e){ ok=false; }
+  if(!mp || mp.att!==d.att || mp.round!==d.round) return;   // superseded
+  mp.loadOk=ok;
+  try{ mp.hostConn.send({t:'ready',round:d.round,att:d.att,ok}); }catch(e){}
+}
+function guestGo(d){
+  if(!mp || mp.round!==d.round) return;
+  mp.phase='guessing';
+  if(!mp.loadOk){
+    setLoading(true,'errLoad'); roundActive=false; mp.submitted=true; updateGuessBtn();
+    try{ mp.hostConn.send({t:'guess',round:d.round,lat:null,lng:null}); }catch(e){}
+    return;
+  }
+  setLoading(false); viewer.resize && viewer.resize();
+  roundActive=true; startTimer(typeof d.secs==='number' ? d.secs : 0);
+}
+
+/* ---------- guessing ---------- */
+function mpSubmitGuess(){
+  roundActive=false; stopTimer();
+  const g=state.guess;
+  const msg={t:'guess',round:mp.round,lat:g?g.lat:null,lng:g?g.lng:null};
+  mp.submitted=true;
+  if(mp.isHost) hostOnGuess('host',msg);
+  else { try{ mp.hostConn.send(msg); }catch(e){} mpMarkGuessed(mp.me); }
+  updateGuessBtn();
+}
+
+/* ---------- results / final ---------- */
+function mpShowResult(m){
+  if(!mp) return;
+  roundActive=false; stopTimer();
+  mp.phase='result'; mp.over=!!m.over; mp.lastResult=m;
+  m.rows.forEach(r=>{ const p=mp.players.find(x=>x.id===r.id); if(p){ p.total=r.total; p.hp=r.hp; } });
+  const mine = m.rows.find(r=>r.id===mp.me) || {pts:0,dist:null,guess:null};
+  lastRes = {dist:mine.dist, pts:mine.pts, noGuess:!mine.guess};
+  show('result');
+  $('nextBtn').style.display = mp.isHost ? '' : 'none';
+  $('waitHost').style.display = mp.isHost ? 'none' : '';
+  $('waitHost').textContent = t('waitHostNext');
+  setTimeout(()=>{
+    resMap.invalidateSize(); resLayer.clearLayers();
+    const truth=[m.truth.lat,m.truth.lng], all=[truth];
+    L.marker(truth,{icon:pinIcon('truth')}).addTo(resLayer);
+    m.rows.forEach(r=>{
+      if(!r.guess) return;
+      const ll=[r.guess.lat,r.guess.lng], c=safeColor(r.color);
+      all.push(ll);
+      const lab=document.createElement('span'); lab.textContent=r.name;
+      L.polyline([ll,truth],{color:c,weight:3,dashArray:'6 8',opacity:.9}).addTo(resLayer);
+      L.marker(ll,{icon:colorPin(c)}).bindTooltip(lab,{permanent:true,direction:'top',offset:[0,-24]}).addTo(resLayer);
+    });
+    if(all.length>1) resMap.fitBounds(L.latLngBounds(all).pad(0.4),{maxZoom:15,animate:true});
+    else resMap.setView(truth,8);
+  },60);
+  renderResultText(); renderBoard(m);
+  const el=$('resPts'), meter=$('resMeter'); meter.style.width='0';
+  requestAnimationFrame(()=>{ meter.style.width=(mine.pts/50)+'%'; });
+  const t0=performance.now(), dur=1100;
+  (function step(now){
+    const k=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-k,3);
+    el.textContent=nf(Math.round(mine.pts*e));
+    if(k<1) requestAnimationFrame(step);
+  })(t0);
+}
+function renderBoard(m){
+  const duel = mp.settings.mode==='duel';
+  const rows=[...m.rows].sort((a,b)=> duel ? b.pts-a.pts : b.total-a.total);
+  const head=`<tr><th>${t('thPlayer')}</th><th>${t('thDist')}</th><th>${t('thPts')}</th><th>${duel?t('hp'):t('mpTotal')}</th></tr>`;
+  const body=rows.map(r=>`<tr><td><span class="dot" style="background:${safeColor(r.color)};margin-right:6px;vertical-align:-1px"></span>${esc(r.name)}${r.id===mp.me?' ★':''}</td>`
+    +`<td>${r.dist==null?'–':fmtDist(r.dist)}</td><td>${nf(r.pts)}</td>`
+    +`<td><b>${nf(duel?r.hp:r.total)}</b>${duel&&r.dmg?` <small style="color:var(--red)">−${nf(r.dmg)}</small>`:''}</td></tr>`).join('');
+  const note = duel && m.mult>1 ? `<div style="color:var(--muted);font-size:12px;margin-top:6px">${t('multiplier',{m:m.mult})}</div>` : '';
+  const b=$('mpBoard'); b.innerHTML=`<table>${head}${body}</table>${note}`; b.style.display='block';
+}
+function mpShowFinal(){
+  if(!mp) return;
+  roundActive=false; stopTimer(); setLoading(false);
+  show('final'); mpRenderFinal();
+}
+function mpRenderFinal(){
+  if(!mp) return;
+  const duel = mp.settings.mode==='duel';
+  const list=[...mp.players].sort((mp.settings.gameType==='battle') ? (a,b)=>b.hp-a.hp||b.total-a.total : duel ? (a,b)=>b.hp-a.hp||b.total-a.total : (a,b)=>b.total-a.total);
+  const w=list[0];
+  const tot=$('finTotal'); tot.style.fontSize='40px'; tot.textContent = w ? '🏆 '+w.name : '';
+  $('finSub').textContent = `${regionName(mp.settings.region)} · ${catLabel(mp.settings.cat)}`;
+  $('finBest').textContent = (w && w.id===mp.me) ? t('youWon') : '';
+  const head=`<tr><th>${t('thPlayer')}</th>${duel?`<th>${t('hp')}</th>`:''}<th>${t('thPts')}</th></tr>`;
+  const rows=list.map((p,i)=>`<tr><td>${i+1}. <span class="dot" style="background:${safeColor(p.color)};margin:0 6px 0 2px;vertical-align:-1px"></span>${esc(p.name)}${p.id===mp.me?' ★':''}</td>`
+    +(duel?`<td>${nf(p.hp)}</td>`:'')+`<td><b>${nf(p.total)}</b></td></tr>`).join('');
+  $('finTable').innerHTML=head+rows;
+  $('againBtn').style.display = mp.isHost ? '' : 'none';
+  $('againBtn').textContent = t('backToLobby');
+  $('menuBtn').textContent = t('leaveRoom');
+}
+
+/* ---------- language refresh for multiplayer UI ---------- */
+function mpApplyLang(){
+  $('mpName').placeholder = t('yourName');
+  $('mpCode').placeholder = t('roomCodePh');
+  if(mpErrKey && $('mpErr').style.display==='block') $('mpErr').textContent=t(mpErrKey);
+  if(!mp) return;
+  buildLobbySelects(); renderLobby(); renderStatus(); updateHud();
+  if($('result').classList.contains('active') && mp.lastResult){
+    renderBoard(mp.lastResult);
+    $('waitHost').textContent=t('waitHostNext');
+  }
+}
+
+/* ---------- multiplayer events ---------- */
+$('mpBtn').addEventListener('click',openMpModal);
+$('mpCancel').addEventListener('click',closeMpModal);
+$('mpModal').addEventListener('click',e=>{ if(e.target===$('mpModal')) closeMpModal(); });
+$('mpCreate').addEventListener('click',mpCreate);
+$('mpJoin').addEventListener('click',mpJoin);
+$('mpCode').addEventListener('keydown',e=>{ if(e.key==='Enter') mpJoin(); });
+$('mpCode').addEventListener('input',e=>{ e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); });
+$('lobbyStart').addEventListener('click',hostStartGame);
+$('lobbyLeave').addEventListener('click',()=>leaveRoom());
+$('lbMapBtn').addEventListener('click',()=>{ if(mp && mp.isHost) openMapPicker('mp'); });
+$('copyBtn').addEventListener('click',async ()=>{
+  if(!mp) return;
+  const link = location.protocol==='file:' ? mp.code : location.href.split('#')[0].split('?')[0] + '#join=' + mp.code;
+  try{ await navigator.clipboard.writeText(link); }
+  catch(e){ try{ window.prompt('Copy:', link); }catch(_){} return; }
+  $('copyBtn').textContent=t('copied');
+  clearTimeout(copyTimer); copyTimer=setTimeout(()=>{ $('copyBtn').textContent=t('copyLink'); },1500);
+});
+
+
+/* ================== COUNTRY FLAG MODES ================== */
+let countryMap=null, countryLayer=null, countryGeo=null, countryTarget=null, countryRound=0, countryScore=0, countryLives=3, countryDone=false, countryDeck=[], countryAttempts=0, countryTimerInt=null, countryTimerEnd=0, battleViewer=null, battleUsedIds=new Set();
+const COUNTRY_NAMES = new Intl.DisplayNames(['en'],{type:'region'});
+function nameForCode(code){try{return COUNTRY_NAMES.of(code)||code}catch(e){return code}}
+function countryStopTimer(){ if(countryTimerInt){clearInterval(countryTimerInt);countryTimerInt=null;} }
+function zoomToCountryTarget(){if(!countryMap||!countryLayer||!countryTarget)return;let targetLayer=null;countryLayer.eachLayer(l=>{if(featureCode(l.feature)===countryTarget.code)targetLayer=l;});if(targetLayer){try{countryMap.fitBounds(targetLayer.getBounds().pad(0.18),{maxZoom:5,animate:true});}catch(e){}}}
+function countryStartTimer(){
+ countryStopTimer();
+ const seconds = Number(cfg.time);
+ if(!Number.isFinite(seconds) || seconds<=0){ $('countryTimer').style.display='none'; return; }
+ $('countryTimer').style.display='';
+ countryTimerEnd=Date.now()+seconds*1000;
+ const tick=()=>{
+   const left=Math.max(0,Math.ceil((countryTimerEnd-Date.now())/1000));
+   $('countryTimer').textContent=t('countryTime')+': '+fmtTime(left);
+   $('countryTimer').style.color=left<=10?'var(--red)':'';
+   if(left<=0){countryStopTimer(); if(!countryDone){
+     countryDone=true;$('countryFeedback').className='bad';$('countryFeedback').textContent=t('flagTimeout');$('countryNext').disabled=false;
+     if(cfg.mode==='battle')countryLives--;
+     countryLayer && countryLayer.eachLayer(l=>{if(featureCode(l.feature)===countryTarget.code)l.setStyle({color:'#15803d',weight:2,fillColor:'#22c55e',fillOpacity:.9})});
+     updateCountryScore(); zoomToCountryTarget();
+   }}
+ };
+ tick(); countryTimerInt=setInterval(tick,250);
+}
+function countryContinentChanged(){
+ const cont=$('countryContinent').value;
+ if(cfg){cfg.region=cont;cfg.info=regionInfo(cont,'all');}
+ if(mp && mp.settings){ if(!mp.isHost){ $('countryContinent').value=mp.settings.countryContinent||'world'; return; } mp.settings.countryContinent=cont; }
+ const pool=COUNTRIES.filter(c=>c.code!=='AQ' && (cont==='world'||c.cont===cont));
+ if(!pool.length)return;
+ countryDeck=pool.slice().sort(()=>Math.random()-.5).slice(0,Math.min(cfg.rounds,pool.length));
+ countryRound=0;countryScore=0;countryLives=3;countryDone=false;countryAttempts=0;
+ if(mp && mp.settings){ mp.settings.countryDeck=countryDeck.map(c=>c.code); if(mp.isHost) broadcast({t:'countryDeck',settings:mp.settings}); }
+ nextCountryQuestion();
+}
+async function startCountryMode(mode, sharedDeck=null){
+ nmpzInteractionLocked = false;
+ const isBattle=mode==='battle';
+ $('countryFlag').style.display=isBattle?'none':'block';
+ $('battleViewer').style.display=isBattle?'block':'none';
+ $('flagPrompt').textContent=isBattle?t('findCountry'):t('whichFlag');
+ const region=(mp&&mp.settings&&mp.settings.region) || (CONT[sel.region]?sel.region:'world');
+ const tokenPool=getPool();
+ cfg={rounds:+((mp&&mp.settings&&mp.settings.rounds)||$('rounds').value),time:+((mp&&mp.settings&&mp.settings.time)||$('time').value),mode, pool:tokenPool, region:region, cat:'all', moving:false, info:regionInfo(region,'all')};
+ if(isBattle && typeof mapillary==='undefined'){ $('countryFeedback').textContent=t('errLibs'); return; }
+ if(isBattle){ try { if(battleViewer){battleViewer.remove();battleViewer=null;} battleViewer=new mapillary.Viewer({accessToken:pick(tokenPool),container:'battleStreetView',component:{cover:false}}); } catch(e){ $('countryFeedback').textContent=t('errLibs'); return; } }
+ battleUsedIds=new Set();
+ countryRound=0; countryScore=0; countryLives=3; countryDone=false; countryAttempts=0;
+ const cont=(mp && mp.settings && mp.settings.countryContinent) || (CONT[sel.region] ? sel.region : ($('countryContinent').value || 'world'));
+ $('countryContinent').value=cont;
+ const pool=COUNTRIES.filter(c=>c.code!=='AQ' && (cont==='world'||c.cont===cont));
+ const src=sharedDeck ? sharedDeck.map(code=>BY_CODE[code]).filter(c=>c && (cont==='world'||c.cont===cont)) : pool;
+ countryDeck=(sharedDeck ? src.slice() : src.slice().sort(()=>Math.random()-.5)).slice(0,Math.min(cfg.rounds,src.length));
+ const modeLabels={flags:t('gameFlags'),battle:t('gameBattle')};
+ $('countryModeTitle').textContent=modeLabels[mode]||t('gameFlags');
+ $('battleLives').style.display=mode==='battle'?'':'none';
+ $('countryNext').textContent=t('countryNext');
+ show('countryGame');
+ if(!countryMap){
+   countryMap=L.map('countryMap',{minZoom:1,maxZoom:6,worldCopyJump:false,zoomControl:true});
+   countryMap.setView([20,0],2);
+   try{
+     const r=await fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson');
+     if(!r.ok) throw new Error('Could not load country borders.');
+     countryGeo=await r.json();
+   }catch(e){$('countryFeedback').textContent=t('countryMapError');return}
+   countryLayer=L.geoJSON(countryGeo,{style:()=>({color:'#566078',weight:1,fillColor:'#cbd5e1',fillOpacity:.78}),onEachFeature:(feature,layer)=>{
+     layer.on('click',()=>chooseCountry(feature,layer));
+     layer.bindTooltip(feature.properties.ADMIN||feature.properties.name||'Country');
+   }}).addTo(countryMap);
+ }
+ countryMap.invalidateSize(); setTimeout(()=>{if(countryMap)countryMap.invalidateSize();},120); nextCountryQuestion();
+}
+function featureCode(f){
+ const p=f.properties||{};
+ return (p['ISO3166-1-Alpha-2']||p.ISO_A2||p.ISO2||p.iso_a2||'').toUpperCase();
+}
+function updateCountryScore(){
+ $('countryScore').textContent=t('score')+': '+countryScore;
+ $('battleLives').textContent='❤️'.repeat(Math.max(0,countryLives))+'🖤'.repeat(Math.max(0,3-countryLives));
+ if(mp){ const me=mp.players.find(p=>p.id===mp.me); if(me){me.total=countryScore;me.hp=countryLives;} if(mp.isHost){broadcast({t:'players',players:mp.players}); checkBattleRoyaleWinner();} else {try{mp.hostConn.send({t:'countryScore',score:countryScore,lives:countryLives});}catch(e){}} }
+}
+function nextCountryQuestion(){
+ countryStopTimer();
+ if(countryMap){countryMap.setView([20,0],2,{animate:false});}
+ if(countryRound>=countryDeck.length || countryLives<=0){finishCountryMode();return}
+ countryRound++; countryDone=false; countryAttempts=0; countryTarget=countryDeck[countryRound-1];
+ $('countryRound').textContent=`${countryRound} / ${countryDeck.length}`;
+ updateCountryScore();
+ $('countryFlag').src=`https://flagcdn.com/w320/${countryTarget.code.toLowerCase()}.png`;
+ $('countryFlag').style.display=cfg.mode==='battle'?'none':'block'; $('battleViewer').style.display=cfg.mode==='battle'?'block':'none';
+ $('flagPrompt').textContent=cfg.mode==='battle'?t('findCountry'):t('whichFlag');
+ $('countryFlag').alt='Flag of '+nameForCode(countryTarget.code);
+ $('countryFeedback').className=''; $('countryFeedback').textContent=cfg.mode==='battle'?t('clickCountry'):t('clickFlagCountry')+' '+t('attemptsLeft',{n:3});
+ $('countryNext').disabled=true; $('countryNext').textContent=t('countryNext');
+ if(countryLayer) countryLayer.setStyle(f=>{
+   const code=featureCode(f), c=BY_CODE[code], cont=$('countryContinent').value||'world';
+   const inCont=cont==='world'||(c&&c.cont===cont);
+   return {color:inCont?'#566078':'#303545',weight:1,fillColor:inCont?'#cbd5e1':'#4a4f5e',fillOpacity:inCont?.78:.12,opacity:inCont?1:.25};
+ });
+ if(cfg.mode==='battle') loadBattleLocation(); else countryStartTimer();
+}
+function pointInRing(lon,lat,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];const intersect=((yi>lat)!==(yj>lat))&&(lon<(xj-xi)*(lat-yi)/((yj-yi)||1e-12)+xi);if(intersect)inside=!inside;}return inside;}
+function pointInGeometry(lon,lat,g){if(!g)return false;if(g.type==='Polygon')return g.coordinates.length>0&&pointInRing(lon,lat,g.coordinates[0])&&!g.coordinates.slice(1).some(r=>pointInRing(lon,lat,r));if(g.type==='MultiPolygon')return g.coordinates.some(poly=>poly.length>0&&pointInRing(lon,lat,poly[0])&&!poly.slice(1).some(r=>pointInRing(lon,lat,r)));return false;}
+function countryAtPoint(lat,lon){if(!countryGeo)return null;const f=countryGeo.features.find(x=>pointInGeometry(lon,lat,x.geometry));return f?featureCode(f):null;}
+async function loadBattleLocation(){try{const loc=await findLocation();if(!loc||!battleViewer||cfg.mode!=='battle')return;await battleViewer.moveTo(loc.id);const code=countryAtPoint(loc.lat,loc.lng);const country=BY_CODE[code];if(!country){throw new Error('Could not identify country for this Street View location');}countryTarget=country;$('countryFeedback').textContent=t('clickCountry');countryStartTimer();}catch(e){console.error(e);countryStopTimer();countryDone=true;$('countryFeedback').className='bad';$('countryFeedback').textContent=t('countryMapError');$('countryNext').disabled=false;}}
+function chooseCountry(feature,layer){
+ if(countryDone || !countryTarget)return;
+ const code=featureCode(feature), cont=$('countryContinent').value||'world';
+ const c=BY_CODE[code];
+ if(cont!=='world' && (!c || c.cont!==cont))return;
+ countryAttempts++;
+ const correct=code===countryTarget.code;
+ if(cfg.mode==='battle'){
+   countryDone=true; countryStopTimer();
+   if(correct){countryScore+=1;layer.setStyle({color:'#15803d',weight:2,fillColor:'#22c55e',fillOpacity:.9});$('countryFeedback').className='good';$('countryFeedback').textContent=t('countryCorrect',{name:nameForCode(countryTarget.code),points:1});}
+   else {countryLives--;layer.setStyle({color:'#b91c1c',weight:2,fillColor:'#ef4444',fillOpacity:.9});$('countryFeedback').className='bad';$('countryFeedback').textContent=t('countryWrong',{n:0})+' '+nameForCode(countryTarget.code);}
+   countryLayer && countryLayer.eachLayer(l=>{if(featureCode(l.feature)===countryTarget.code)l.setStyle({color:'#15803d',weight:2,fillColor:'#22c55e',fillOpacity:.9})});
+   $('countryNext').disabled=false;updateCountryScore();return;
+ }
+ if(correct){
+   countryDone=true; countryStopTimer();
+   const pts= Math.max(1,4-countryAttempts); countryScore+=pts;
+   layer.setStyle({color:'#15803d',weight:2,fillColor:'#22c55e',fillOpacity:.9});
+   $('countryFeedback').className='good';$('countryFeedback').textContent=t('countryCorrect',{name:nameForCode(countryTarget.code),points:pts});
+   $('countryNext').disabled=false;
+ } else {
+   layer.setStyle({color:'#b91c1c',weight:2,fillColor:'#ef4444',fillOpacity:.9});
+   if(cfg.mode==='battle'){
+     countryDone=true; countryStopTimer(); countryLives--;
+     $('countryFeedback').className='bad'; $('countryFeedback').textContent=t('countryWrong',{n:0})+' '+nameForCode(countryTarget.code);
+     countryLayer.eachLayer(l=>{if(featureCode(l.feature)===countryTarget.code)l.setStyle({color:'#15803d',weight:2,fillColor:'#22c55e',fillOpacity:.9})});
+     $('countryNext').disabled=false; updateCountryScore(); return;
+   }
+   const remaining=3-countryAttempts;
+   if(remaining<=0){
+     countryDone=true; countryStopTimer();
+     $('countryFeedback').className='bad';$('countryFeedback').textContent=t('countryWrong',{n:0})+' '+nameForCode(countryTarget.code);
+     if(cfg.mode==='battle')countryLives--;
+     countryLayer.eachLayer(l=>{if(featureCode(l.feature)===countryTarget.code)l.setStyle({color:'#15803d',weight:2,fillColor:'#22c55e',fillOpacity:.9})});
+     $('countryNext').disabled=false; zoomToCountryTarget();
+   } else {
+     $('countryFeedback').className='bad';$('countryFeedback').textContent=t('countryWrong',{n:remaining});
+   }
+ }
+ updateCountryScore();
+}
+function finishCountryMode(){
+ countryStopTimer();
+ zoomToCountryTarget();
+ $('countryFlag').style.display='none';
+ $('countryFeedback').className='good';
+ $('countryFeedback').textContent=t('countryFinished',{score:countryScore})+(countryLives<=0?' '+t('livesOver'):'');
+ $('countryRound').textContent=`${Math.min(countryRound,countryDeck.length)} / ${countryDeck.length}`;
+ $('countryNext').disabled=false;$('countryNext').textContent=t('playAgain');
+ if(battleViewer){try{battleViewer.remove();}catch(e){}battleViewer=null;}
+ countryTarget=null;
+}
+function restartCountryMode(){ startCountryMode(mp && mp.settings ? mp.settings.gameType : $('gameMode').value, mp && mp.settings ? mp.settings.countryDeck : null); }
+
+/* ================== EVENTS ================== */
+$('languageSelect').addEventListener('change',e=>{ lang=e.target.value||'en'; applyLang(); });
+$('mapBtn').addEventListener('click',()=>openMapPicker('sp'));
+$('mapClose').addEventListener('click',closeMapPicker);
+$('mapModal').addEventListener('click',e=>{ if(e.target===$('mapModal')) closeMapPicker(); });
+$('mapSearch').addEventListener('input',renderMapList);
+$('mapSearch').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ const f=document.querySelector('#mapList .item'); if(f) f.click(); }
+  if(e.key==='Escape') closeMapPicker();
+});
+$('cat').addEventListener('change',e=>{ sel.cat=e.target.value; store.set('lg_cat',sel.cat); updateBest(); });
+$('rounds').addEventListener('change',updateBest);
+$('playBtn').addEventListener('click',startGame);
+$('countryQuit').addEventListener('click',()=>{countryStopTimer();if(mp){leaveRoom();return;}show('start');});
+$('countryContinent').addEventListener('change',countryContinentChanged);
+$('countryNext').addEventListener('click',()=>{if(!countryTarget){restartCountryMode();return;} if(countryDone)nextCountryQuestion();});
+$('guessBtn').addEventListener('click',()=>submitGuess(false));
+$('pinBtn').addEventListener('click',()=>{ $('guessBox').classList.toggle('pinned'); setTimeout(()=>miniMap.invalidateSize(),250); });
+$('homeBtn').addEventListener('click',()=>{ if(state && state.loc && viewer) viewer.moveTo(state.loc.id).catch(()=>{}); });
+$('quitBtn').addEventListener('click',()=>{ if(confirm(t('quitConfirm'))){ if(mp){ leaveRoom(); return; } stopTimer(); roundActive=false; show('start'); } });
+$('nextBtn').addEventListener('click',async ()=>{
+  if(mp){ if(mp.isHost && mp.phase==='result') hostAfterResult(); return; }
+  if(state.round>=cfg.rounds){ endGame(); return; }
+  try{ await nextRound(); }catch(e){ fail(e); }
+});
+$('againBtn').addEventListener('click',()=>{ if(mp){ if(mp.isHost) hostToLobby(); return; } startGame(); });
+$('menuBtn').addEventListener('click',()=>{ if(mp) leaveRoom(); else show('start'); });
+window.addEventListener('resize',()=>{ try{ viewer && viewer.resize(); }catch(e){} });
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  if($('mapModal').classList.contains('open')){ if(e.key==='Escape') closeMapPicker(); return; }
+  if($('mpModal').classList.contains('open')) return;
+  if((e.key==='Enter'||e.key===' ') && $('result').classList.contains('active')){ e.preventDefault(); $('nextBtn').click(); }
+  else if(e.key==='Enter' && roundActive && state.guess){ e.preventDefault(); submitGuess(false); }
+  else if((e.key==='m'||e.key==='M') && roundActive){ $('pinBtn').click(); }
+});
+
+/* ================== INIT ================== */
+$('rounds').value = store.get('lg_rounds') || '5';
+applyLang();
+$('languageSelect').value=lang;
+const hashJoin = location.hash.match(/join=([A-Za-z0-9]{4,6})/);
+if(hashJoin){ $('mpCode').value = hashJoin[1].toUpperCase(); openMpModal(); }
+})();
+</script>
+</body>
+</html>
